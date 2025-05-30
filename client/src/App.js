@@ -16,7 +16,11 @@ import CourseList from './components/courses/CourseList';
 import CourseDetail from './components/courses/CourseDetail';
 import CourseCreate from './components/courses/CourseCreate';
 import LessonDetail from './components/lessons/LessonDetail';
+import LessonCreate from './components/lessons/LessonCreate';
 import Dashboard from './components/dashboard/Dashboard';
+import CourseEdit from './components/courses/CourseEdit';
+import Students from './components/students/Students';
+import Messages from './components/messages/Messages';
 
 // Создание темы
 const theme = createTheme({
@@ -61,8 +65,12 @@ function App() {
               <Route path="/courses" element={<CourseList />} />
               <Route path="/courses/:id" element={<CourseDetail />} />
               <Route path="/courses/create" element={<CourseCreate />} />
-              <Route path="/lessons/:id" element={<LessonDetail />} />
+              <Route path="/courses/:id/edit" element={<CourseEdit />} />
+              <Route path="/courses/:courseId/lessons/create" element={<LessonCreate />} />
+              <Route path="/courses/:courseId/lessons/:lessonId" element={<LessonDetail />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/students" element={<Students />} />
+              <Route path="/messages" element={<Messages />} />
             </Routes>
           </div>
         </Router>

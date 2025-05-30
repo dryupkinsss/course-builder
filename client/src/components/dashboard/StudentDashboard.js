@@ -41,8 +41,10 @@ const StudentDashboard = () => {
   });
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (user) {
+      fetchData();
+    }
+  }, [user]);
 
   const fetchData = async () => {
     try {
@@ -56,15 +58,19 @@ const StudentDashboard = () => {
       let scoreCount = 0;
 
       response.data.forEach(course => {
-        const progress = user.progress.find(p => p.course.toString() === course._id.toString());
+        const progress = user?.progress?.find(p => p.course.toString() === course._id.toString());
         if (progress) {
-          completedLessons += progress.completedLessons.length;
-          totalLessons += course.lessons.length;
+          completedLessons += progress.completedLessons?.length || 0;
+          totalLessons += course.lessons?.length || 0;
           
-          progress.quizScores.forEach(score => {
-            totalScore += score.score;
-            scoreCount++;
-          });
+          if (progress.quizScores) {
+            progress.quizScores.forEach(score => {
+              totalScore += score.score;
+              scoreCount++;
+            });
+          }
+        } else {
+          totalLessons += course.lessons?.length || 0;
         }
       });
 
@@ -73,8 +79,8 @@ const StudentDashboard = () => {
         totalLessons,
         averageScore: scoreCount > 0 ? Math.round(totalScore / scoreCount) : 0,
         certificates: response.data.filter(course => {
-          const progress = user.progress.find(p => p.course.toString() === course._id.toString());
-          return progress && progress.completedLessons.length === course.lessons.length;
+          const progress = user?.progress?.find(p => p.course.toString() === course._id.toString());
+          return progress && progress.completedLessons?.length === course.lessons?.length;
         }).length
       });
       
@@ -84,6 +90,16 @@ const StudentDashboard = () => {
       setLoading(false);
     }
   };
+
+  if (!user) {
+    return (
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Alert severity="warning">
+          Пожалуйста, войдите в систему для доступа к личному кабинету
+        </Alert>
+      </Container>
+    );
+  }
 
   if (loading) {
     return (
@@ -202,60 +218,38 @@ const StudentDashboard = () => {
       </Grid>
 
       {/* Список курсов */}
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Мои курсы
-        </Typography>
-        <List>
-          {enrolledCourses.map((course) => {
-            const progress = user.progress.find(p => p.course.toString() === course._id.toString());
-            const completedLessons = progress ? progress.completedLessons.length : 0;
-            const progressPercentage = Math.round((completedLessons / course.lessons.length) * 100);
-
-            return (
-              <React.Fragment key={course._id}>
-                <ListItem>
-                  <ListItemText
-                    primary={course.title}
-                    secondary={`Прогресс: ${progressPercentage}% • ${completedLessons}/${course.lessons.length} уроков`}
-                  />
-                  <ListItemSecondaryAction>
-                    <IconButton
-                      edge="end"
-                      onClick={() => navigate(`/courses/${course._id}`)}
-                    >
-                      <PlayArrowIcon />
-                    </IconButton>
-                  </ListItemSecondaryAction>
-                </ListItem>
-                <Divider />
-              </React.Fragment>
-            );
-          })}
-        </List>
-      </Paper>
-
-      {/* Последние уведомления */}
-      <Paper sx={{ p: 3, mt: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Последние уведомления
-        </Typography>
-        <List>
-          <ListItem>
-            <ListItemText
-              primary="Новый урок доступен"
-              secondary="2 часа назад"
-            />
-          </ListItem>
-          <Divider />
-          <ListItem>
-            <ListItemText
-              primary="Получен сертификат"
-              secondary="5 часов назад"
-            />
-          </ListItem>
-        </List>
-      </Paper>
+      <Typography variant="h5" gutterBottom>
+        Мои курсы
+      </Typography>
+      <List>
+        {enrolledCourses.map((course, index) => (
+          <React.Fragment key={course._id}>
+            <ListItem>
+              <ListItemText
+                primary={course.title}
+                secondary={`${course.lessons?.length || 0} уроков`}
+              />
+              <ListItemSecondaryAction>
+                <Button
+                  variant="contained"
+                  startIcon={<PlayArrowIcon />}
+                  onClick={() => {
+                    if (Array.isArray(course.lessons) && course.lessons.length > 0 && course.lessons[0]?._id) {
+                      navigate(`/courses/${course._id}/lessons/${course.lessons[0]._id}`);
+                    } else {
+                      // Можно добавить уведомление пользователю
+                      console.warn('Нет доступных уроков в курсе');
+                    }
+                  }}
+                >
+                  Продолжить обучение
+                </Button>
+              </ListItemSecondaryAction>
+            </ListItem>
+            {index < enrolledCourses.length - 1 && <Divider />}
+          </React.Fragment>
+        ))}
+      </List>
     </Container>
   );
 };

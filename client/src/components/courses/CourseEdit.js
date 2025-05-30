@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
   Container,
@@ -14,16 +14,16 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  IconButton,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
   CircularProgress,
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  IconButton
 } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import { coursesAPI } from '../../services/api';
@@ -42,10 +42,11 @@ const levels = [
   { label: 'Продвинутый', value: 'advanced' }
 ];
 
-const CourseCreate = () => {
+const CourseEdit = () => {
+  const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useSelector((state) => state.auth);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     title: '',
@@ -59,7 +60,7 @@ const CourseCreate = () => {
     lessons: []
   });
 
-  // Состояние для диалога создания урока
+  // Состояние для диалога создания/редактирования урока
   const [lessonDialogOpen, setLessonDialogOpen] = useState(false);
   const [currentLesson, setCurrentLesson] = useState({
     title: '',
@@ -71,22 +72,50 @@ const CourseCreate = () => {
   });
   const [editingLessonIndex, setEditingLessonIndex] = useState(-1);
 
+  useEffect(() => {
+    const fetchCourse = async () => {
+      try {
+        console.log('Fetching course with ID:', id);
+        const response = await coursesAPI.getById(id);
+        console.log('Course data received:', response.data);
+        
+        const course = response.data;
+        if (!course) {
+          console.error('No course data received');
+          setError('Курс не найден');
+          return;
+        }
+
+        const newFormData = {
+          title: course.title || '',
+          description: course.description || '',
+          category: course.category || '',
+          level: course.level || '',
+          price: course.price || '',
+          thumbnail: course.thumbnail || null,
+          requirements: Array.isArray(course.requirements) ? course.requirements : [''],
+          learningObjectives: Array.isArray(course.learningObjectives) ? course.learningObjectives : [''],
+          lessons: Array.isArray(course.lessons) ? course.lessons : []
+        };
+
+        console.log('Setting form data:', newFormData);
+        setFormData(newFormData);
+      } catch (err) {
+        console.error('Error loading course:', err);
+        setError('Ошибка при загрузке курса');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCourse();
+  }, [id]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
       [name]: value
     });
-  };
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setFormData({
-        ...formData,
-        thumbnail: file
-      });
-    }
   };
 
   const handleArrayChange = (index, value, field) => {
@@ -124,9 +153,10 @@ const CourseCreate = () => {
   const handleLessonFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Сохраняем только имя файла, так как это временный файл
       setCurrentLesson({
         ...currentLesson,
-        video: file
+        video: file.name
       });
     }
   };
@@ -157,7 +187,11 @@ const CourseCreate = () => {
 
   const openLessonDialog = (index = -1) => {
     if (index >= 0) {
-      setCurrentLesson(formData.lessons[index]);
+      const lesson = formData.lessons[index];
+      setCurrentLesson({
+        ...lesson,
+        resources: Array.isArray(lesson.resources) ? lesson.resources : ['']
+      });
       setEditingLessonIndex(index);
     } else {
       setCurrentLesson({
@@ -174,16 +208,22 @@ const CourseCreate = () => {
   };
 
   const handleLessonSubmit = () => {
-    if (!currentLesson.title || !currentLesson.description || !currentLesson.duration || !currentLesson.video) {
+    if (!currentLesson.title || !currentLesson.description || !currentLesson.duration) {
       setError('Пожалуйста, заполните все обязательные поля урока');
       return;
     }
 
     const newLessons = [...formData.lessons];
+    const lessonToAdd = {
+      ...currentLesson,
+      video: currentLesson.video ? (typeof currentLesson.video === 'string' ? currentLesson.video : '') : '',
+      resources: Array.isArray(currentLesson.resources) ? currentLesson.resources.filter(Boolean) : ['']
+    };
+
     if (editingLessonIndex >= 0) {
-      newLessons[editingLessonIndex] = currentLesson;
+      newLessons[editingLessonIndex] = lessonToAdd;
     } else {
-      newLessons.push(currentLesson);
+      newLessons.push(lessonToAdd);
     }
 
     setFormData({
@@ -202,30 +242,20 @@ const CourseCreate = () => {
     });
   };
 
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFormData({
+        ...formData,
+        thumbnail: file
+      });
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSaving(true);
     setError('');
-    setLoading(true);
-
-    // Валидация
-    if (!formData.title || !formData.description || !formData.category || !formData.level) {
-      setError('Пожалуйста, заполните все обязательные поля');
-      setLoading(false);
-      return;
-    }
-
-    if (formData.requirements.some(req => !req) || formData.learningObjectives.some(obj => !obj)) {
-      setError('Пожалуйста, заполните все требования и цели обучения');
-      setLoading(false);
-      return;
-    }
-
-    if (formData.lessons.length === 0) {
-      setError('Пожалуйста, добавьте хотя бы один урок');
-      setLoading(false);
-      return;
-    }
-
     try {
       const formDataToSend = new FormData();
       Object.keys(formData).forEach(key => {
@@ -236,45 +266,47 @@ const CourseCreate = () => {
         } else if (key === 'thumbnail' && formData[key]) {
           formDataToSend.append('thumbnail', formData[key]);
         } else if (key === 'lessons') {
-          // Добавляем уроки без видео
-          const lessonsWithoutVideos = formData[key].map(lesson => ({
-            ...lesson,
-            video: null
-          }));
-          formDataToSend.append(key, JSON.stringify(lessonsWithoutVideos));
-          
-          // Добавляем видео уроков
-          formData[key].forEach((lesson, index) => {
-            if (lesson.video) {
-              formDataToSend.append('lessonVideos', lesson.video);
-            }
-          });
+          formDataToSend.append(key, JSON.stringify(formData[key]));
         } else if (key !== 'thumbnail') {
           formDataToSend.append(key, formData[key]);
         }
       });
 
-      await coursesAPI.create(formDataToSend);
+      await coursesAPI.update(id, formDataToSend);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'Ошибка при создании курса');
-      setLoading(false);
+      setError(err.response?.data?.message || 'Ошибка при сохранении изменений');
+    } finally {
+      setSaving(false);
     }
   };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Container>
+        <Alert severity="error" sx={{ mt: 4 }}>
+          {error}
+        </Alert>
+      </Container>
+    );
+  }
+
+  console.log('Current formData:', formData);
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
       <Paper sx={{ p: 4 }}>
         <Typography variant="h4" gutterBottom>
-          Создание нового курса
+          Редактирование курса
         </Typography>
-
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {error}
-          </Alert>
-        )}
-
         <form onSubmit={handleSubmit}>
           <TextField
             fullWidth
@@ -285,7 +317,6 @@ const CourseCreate = () => {
             margin="normal"
             required
           />
-
           <TextField
             fullWidth
             label="Описание курса"
@@ -297,7 +328,6 @@ const CourseCreate = () => {
             multiline
             rows={4}
           />
-
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12} md={6}>
               <FormControl fullWidth margin="normal">
@@ -317,7 +347,6 @@ const CourseCreate = () => {
                 </Select>
               </FormControl>
             </Grid>
-
             <Grid item xs={12} md={6}>
               <FormControl fullWidth margin="normal">
                 <InputLabel>Уровень сложности</InputLabel>
@@ -337,7 +366,6 @@ const CourseCreate = () => {
               </FormControl>
             </Grid>
           </Grid>
-
           <TextField
             fullWidth
             label="Цена курса (₽)"
@@ -366,19 +394,52 @@ const CourseCreate = () => {
                 Загрузить обложку курса
               </Button>
             </label>
-            {formData.thumbnail && (
-              <Typography variant="body2" sx={{ mt: 1 }}>
-                Выбрано: {formData.thumbnail.name}
-              </Typography>
+            {formData.thumbnail instanceof File && (
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="body2">
+                  Выбрано: {formData.thumbnail.name}
+                </Typography>
+                <Box
+                  component="img"
+                  src={URL.createObjectURL(formData.thumbnail)}
+                  alt="Предпросмотр обложки"
+                  sx={{
+                    mt: 1,
+                    maxWidth: '200px',
+                    maxHeight: '150px',
+                    objectFit: 'cover',
+                    borderRadius: 1
+                  }}
+                />
+              </Box>
+            )}
+            {formData.thumbnail && typeof formData.thumbnail === 'string' && (
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="body2">
+                  Текущая обложка: {formData.thumbnail.split('/').pop()}
+                </Typography>
+                <Box
+                  component="img"
+                  src={`http://localhost:5000/${formData.thumbnail}`}
+                  alt="Обложка курса"
+                  sx={{
+                    mt: 1,
+                    maxWidth: '200px',
+                    maxHeight: '150px',
+                    objectFit: 'cover',
+                    borderRadius: 1
+                  }}
+                />
+              </Box>
             )}
           </Box>
 
-          <Typography variant="h6" gutterBottom>
+          <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
             Требования к курсу
           </Typography>
-          <List>
+          <Box>
             {formData.requirements.map((requirement, index) => (
-              <ListItem key={index}>
+              <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <TextField
                   fullWidth
                   value={requirement}
@@ -386,32 +447,25 @@ const CourseCreate = () => {
                   placeholder="Введите требование"
                   required
                 />
-                <ListItemSecondaryAction>
-                  <IconButton
-                    edge="end"
-                    onClick={() => removeArrayItem(index, 'requirements')}
-                    disabled={formData.requirements.length === 1}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
+                <Button
+                  onClick={() => removeArrayItem(index, 'requirements')}
+                  disabled={formData.requirements.length === 1}
+                  sx={{ ml: 1 }}
+                >
+                  Удалить
+                </Button>
+              </Box>
             ))}
-          </List>
-          <Button
-            startIcon={<AddIcon />}
-            onClick={() => addArrayItem('requirements')}
-            sx={{ mb: 3 }}
-          >
-            Добавить требование
-          </Button>
-
-          <Typography variant="h6" gutterBottom>
+            <Button onClick={() => addArrayItem('requirements')} sx={{ mb: 3 }}>
+              Добавить требование
+            </Button>
+          </Box>
+          <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
             Чему научатся студенты
           </Typography>
-          <List>
+          <Box>
             {formData.learningObjectives.map((objective, index) => (
-              <ListItem key={index}>
+              <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <TextField
                   fullWidth
                   value={objective}
@@ -419,31 +473,24 @@ const CourseCreate = () => {
                   placeholder="Введите цель обучения"
                   required
                 />
-                <ListItemSecondaryAction>
-                  <IconButton
-                    edge="end"
-                    onClick={() => removeArrayItem(index, 'learningObjectives')}
-                    disabled={formData.learningObjectives.length === 1}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
+                <Button
+                  onClick={() => removeArrayItem(index, 'learningObjectives')}
+                  disabled={formData.learningObjectives.length === 1}
+                  sx={{ ml: 1 }}
+                >
+                  Удалить
+                </Button>
+              </Box>
             ))}
-          </List>
-          <Button
-            startIcon={<AddIcon />}
-            onClick={() => addArrayItem('learningObjectives')}
-            sx={{ mb: 3 }}
-          >
-            Добавить цель обучения
-          </Button>
-
+            <Button onClick={() => addArrayItem('learningObjectives')} sx={{ mb: 3 }}>
+              Добавить цель обучения
+            </Button>
+          </Box>
           <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
             Уроки курса
           </Typography>
           <List>
-            {formData.lessons.map((lesson, index) => (
+            {formData?.lessons?.map((lesson, index) => (
               <ListItem key={index}>
                 <ListItemText
                   primary={`${index + 1}. ${lesson.title}`}
@@ -474,15 +521,14 @@ const CourseCreate = () => {
           >
             Добавить урок
           </Button>
-
           <Box sx={{ mt: 4, display: 'flex', gap: 2 }}>
             <Button
               type="submit"
               variant="contained"
               size="large"
-              disabled={loading}
+              disabled={saving}
             >
-              {loading ? <CircularProgress size={24} /> : 'Создать курс'}
+              {saving ? <CircularProgress size={24} /> : 'Сохранить изменения'}
             </Button>
             <Button
               variant="outlined"
@@ -539,7 +585,7 @@ const CourseCreate = () => {
             required
           />
 
-          <Box sx={{ mt: 2, mb: 3 }}>
+          <Box sx={{ mt: 2 }}>
             <input
               accept="video/*"
               type="file"
@@ -553,18 +599,18 @@ const CourseCreate = () => {
                 component="span"
                 startIcon={<AddIcon />}
               >
-                Загрузить видео урока
+                Загрузить видео
               </Button>
             </label>
             {currentLesson.video && (
               <Typography variant="body2" sx={{ mt: 1 }}>
-                Выбрано: {currentLesson.video.name}
+                Выбрано: {currentLesson.video}
               </Typography>
             )}
           </Box>
 
-          <Typography variant="subtitle1" gutterBottom>
-            Дополнительные ресурсы
+          <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
+            Ресурсы урока
           </Typography>
           <List>
             {currentLesson.resources.map((resource, index) => (
@@ -573,7 +619,7 @@ const CourseCreate = () => {
                   fullWidth
                   value={resource}
                   onChange={(e) => handleLessonResourceChange(index, e.target.value)}
-                  placeholder="Ссылка на ресурс (например, GitHub, документация)"
+                  placeholder="Введите ссылку на ресурс"
                   required
                 />
                 <ListItemSecondaryAction>
@@ -597,11 +643,9 @@ const CourseCreate = () => {
           </Button>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setLessonDialogOpen(false)}>
-            Отмена
-          </Button>
+          <Button onClick={() => setLessonDialogOpen(false)}>Отмена</Button>
           <Button onClick={handleLessonSubmit} variant="contained">
-            {editingLessonIndex >= 0 ? 'Сохранить' : 'Добавить'}
+            {editingLessonIndex >= 0 ? 'Сохранить изменения' : 'Добавить урок'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -609,4 +653,4 @@ const CourseCreate = () => {
   );
 };
 
-export default CourseCreate; 
+export default CourseEdit; 

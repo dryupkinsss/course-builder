@@ -36,7 +36,7 @@ const TeacherDashboard = () => {
   const [courses, setCourses] = useState([]);
   const [stats, setStats] = useState({
     totalStudents: 0,
-    totalLessons: 0,
+    totalCourses: 0,
     totalRevenue: 0,
     averageRating: 0
   });
@@ -52,16 +52,16 @@ const TeacherDashboard = () => {
       
       // Подсчет статистики
       let totalStudents = 0;
-      let totalLessons = 0;
-      let totalRevenue = 0;
       let totalRating = 0;
       let ratingCount = 0;
 
       response.data.forEach(course => {
-        totalStudents += course.students?.length || 0;
-        totalLessons += course.lessons?.length || 0;
-        totalRevenue += (course.price || 0) * (course.students?.length || 0);
+        // Подсчет студентов
+        if (Array.isArray(course.enrolledStudents)) {
+          totalStudents += course.enrolledStudents.length;
+        }
         
+        // Подсчет рейтинга
         if (course.rating) {
           totalRating += course.rating;
           ratingCount++;
@@ -70,9 +70,9 @@ const TeacherDashboard = () => {
 
       setStats({
         totalStudents,
-        totalLessons,
-        totalRevenue,
-        averageRating: ratingCount > 0 ? (totalRating / ratingCount).toFixed(1) : 0
+        totalCourses: response.data.length,
+        totalRevenue: response.data.reduce((sum, course) => sum + (course.price || 0), 0),
+        averageRating: ratingCount > 0 ? Math.round((totalRating / ratingCount) * 10) / 10 : 0
       });
       
       setLoading(false);
@@ -131,10 +131,10 @@ const TeacherDashboard = () => {
           <Card>
             <CardContent>
               <Typography color="textSecondary" gutterBottom>
-                Всего уроков
+                Всего курсов
               </Typography>
               <Typography variant="h4">
-                {stats.totalLessons}
+                {stats.totalCourses}
               </Typography>
             </CardContent>
           </Card>
@@ -146,7 +146,7 @@ const TeacherDashboard = () => {
                 Общий доход
               </Typography>
               <Typography variant="h4">
-                ${stats.totalRevenue}
+                {stats.totalRevenue} ₽
               </Typography>
             </CardContent>
           </Card>
@@ -191,16 +191,6 @@ const TeacherDashboard = () => {
           <Button
             fullWidth
             variant="outlined"
-            startIcon={<AssessmentIcon />}
-            onClick={() => navigate('/analytics')}
-          >
-            Аналитика
-          </Button>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Button
-            fullWidth
-            variant="outlined"
             startIcon={<MessageIcon />}
             onClick={() => navigate('/messages')}
           >
@@ -220,7 +210,7 @@ const TeacherDashboard = () => {
               <ListItem>
                 <ListItemText
                   primary={course.title}
-                  secondary={`${course.students?.length || 0} студентов • ${course.lessons?.length || 0} уроков`}
+                  secondary={`${course.enrolledStudents?.length || 0} студентов • ${course.lessons?.length || 0} уроков`}
                 />
                 <ListItemSecondaryAction>
                   <IconButton

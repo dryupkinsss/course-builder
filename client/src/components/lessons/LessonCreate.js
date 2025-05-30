@@ -18,7 +18,8 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  Grid
 } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { lessonsAPI, coursesAPI } from '../../services/api';
@@ -125,17 +126,18 @@ const LessonCreate = () => {
 
     try {
       const formDataToSend = new FormData();
-      Object.keys(formData).forEach(key => {
-        if (key === 'resources') {
-          formDataToSend.append(key, JSON.stringify(formData[key]));
-        } else {
-          formDataToSend.append(key, formData[key]);
-        }
-      });
+      formDataToSend.append('course', courseId);
+      formDataToSend.append('title', formData.title);
+      formDataToSend.append('description', formData.description);
+      formDataToSend.append('duration', formData.duration);
+      formDataToSend.append('order', formData.order);
+      formDataToSend.append('resources', JSON.stringify(formData.resources));
+      formDataToSend.append('video', formData.video);
 
       await lessonsAPI.create(formDataToSend);
       navigate(`/courses/${courseId}`);
     } catch (err) {
+      console.error('Ошибка при создании урока:', err);
       setError(err.response?.data?.message || 'Ошибка при создании урока');
       setLoading(false);
     }

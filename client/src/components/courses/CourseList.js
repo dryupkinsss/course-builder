@@ -36,6 +36,12 @@ const levels = [
   'Продвинутый'
 ];
 
+const levelLabels = {
+  beginner: 'Начальный',
+  intermediate: 'Средний',
+  advanced: 'Продвинутый'
+};
+
 const CourseList = () => {
   const navigate = useNavigate();
   const [courses, setCourses] = useState([]);
@@ -95,7 +101,7 @@ const CourseList = () => {
   }
 
   return (
-    <Container sx={{ py: 4 }}>
+    <Container sx={{ py: 4 }} maxWidth="md">
       <Box sx={{ mb: 4 }}>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} md={4}>
@@ -146,10 +152,10 @@ const CourseList = () => {
 
       <Grid container spacing={4}>
         {filteredCourses.map((course) => (
-          <Grid item key={course._id} xs={12} sm={6} md={4}>
+          <Grid item key={course._id}>
             <Card
               sx={{
-                height: '100%',
+                width: '350px',
                 display: 'flex',
                 flexDirection: 'column',
                 cursor: 'pointer'
@@ -159,14 +165,34 @@ const CourseList = () => {
               <CardMedia
                 component="img"
                 height="200"
-                image={course.thumbnail || 'https://source.unsplash.com/random?course'}
+                image={course.thumbnail ? `http://localhost:5000/${course.thumbnail}` : 'https://source.unsplash.com/random?course'}
                 alt={course.title}
+                sx={{ width: '100%', objectFit: 'cover' }}
               />
-              <CardContent sx={{ flexGrow: 1 }}>
-                <Typography gutterBottom variant="h5" component="h2">
+              <CardContent sx={{ 
+                flexGrow: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                '&:last-child': { pb: 2 }
+              }}>
+                <Typography gutterBottom variant="h5" component="h2" noWrap>
                   {course.title}
                 </Typography>
-                <Typography variant="body2" color="text.secondary" paragraph>
+                <Typography 
+                  variant="body2" 
+                  color="text.secondary" 
+                  sx={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: 'vertical',
+                    mb: 2,
+                    wordBreak: 'break-word',
+                    whiteSpace: 'normal'
+                  }}
+                >
                   {course.description}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -175,11 +201,11 @@ const CourseList = () => {
                     ({course.rating})
                   </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
                   <Chip label={course.category} size="small" />
-                  <Chip label={course.level} size="small" />
+                  <Chip label={levelLabels[course.level] || course.level} size="small" />
                 </Box>
-                <Typography variant="h6" color="primary">
+                <Typography variant="h6" color="primary" sx={{ mt: 'auto' }}>
                   {course.price === 0 ? 'Бесплатно' : `${course.price} ₽`}
                 </Typography>
               </CardContent>

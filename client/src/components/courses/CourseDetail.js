@@ -26,9 +26,16 @@ import {
   AccessTime,
   Person,
   School,
-  Star
+  Star,
+  Add
 } from '@mui/icons-material';
 import { coursesAPI } from '../../services/api';
+
+const levelLabels = {
+  beginner: 'Начальный',
+  intermediate: 'Средний',
+  advanced: 'Продвинутый'
+};
 
 const CourseDetail = () => {
   const { id } = useParams();
@@ -90,10 +97,28 @@ const CourseDetail = () => {
 
     try {
       await coursesAPI.enroll(id);
-      navigate(`/lessons/${course.lessons[0]._id}`);
+      navigate(`/courses/${id}/lessons/${course.lessons[0]._id}`);
     } catch (err) {
-      setError('Ошибка при записи на курс');
+      if (err.response?.status === 400 && err.response?.data?.message === 'Вы уже записаны на этот курс') {
+        setError('Вы уже записаны на этот курс. Перейдите к первому уроку.');
+        setTimeout(() => {
+          navigate(`/courses/${id}/lessons/${course.lessons[0]._id}`);
+        }, 2000);
+      } else {
+        setError('Ошибка при записи на курс');
+      }
     }
+  };
+
+  // Добавляем функцию для проверки, является ли пользователь создателем курса
+  const isCourseCreator = () => {
+    console.log('Checking if user is course creator:', {
+      isAuthenticated,
+      userId: user?._id,
+      courseInstructorId: course?.instructor,
+      isCreator: isAuthenticated && user && course && user._id === course.instructor
+    });
+    return isAuthenticated && user && course && user._id === course.instructor;
   };
 
   if (loading) {
@@ -123,13 +148,32 @@ const CourseDetail = () => {
       <Grid container spacing={4}>
         {/* Основная информация о курсе */}
         <Grid item xs={12} md={8}>
-          <Card>
-            <CardMedia
-              component="img"
-              height="400"
-              image={course.thumbnail || 'https://source.unsplash.com/random?course'}
-              alt={course.title}
-            />
+          <Card sx={{ overflow: 'hidden', bgcolor: '#fff' }}>
+            <Box
+              sx={{
+                position: 'relative',
+                width: '100%',
+                height: '400px',
+                bgcolor: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <CardMedia
+                component="img"
+                image={course.thumbnail ? `http://localhost:5000/${course.thumbnail.replace(/\\/g, '/')}` : 'https://source.unsplash.com/random?course'}
+                alt={course.title}
+                sx={{
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  objectFit: 'contain',
+                  borderRadius: 2,
+                  boxShadow: 1,
+                  background: '#fff'
+                }}
+              />
+            </Box>
             <CardContent>
               <Typography variant="h4" gutterBottom>
                 {course.title}
@@ -145,11 +189,25 @@ const CourseDetail = () => {
               </Box>
               <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
                 <Chip label={course.category} />
-                <Chip label={course.level} />
+                <Chip label={levelLabels[course.level] || course.level} />
               </Box>
               <Typography variant="body1" paragraph>
                 {course.description}
               </Typography>
+              {course.requirements && course.requirements.length > 0 && (
+                <>
+                  <Typography variant="h6" gutterBottom>
+                    Требования:
+                  </Typography>
+                  <List>
+                    {course.requirements.map((req, idx) => (
+                      <ListItem key={idx}>
+                        <ListItemText primary={req} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </>
+              )}
               <Typography variant="h6" gutterBottom>
                 Чему вы научитесь:
               </Typography>
@@ -167,18 +225,23 @@ const CourseDetail = () => {
         {/* Боковая панель */}
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 2, mb: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              Стоимость курса
+            </Typography>
             <Typography variant="h5" gutterBottom>
               {course.price === 0 ? 'Бесплатно' : `${course.price} ₽`}
             </Typography>
-            <Button
-              variant="contained"
-              fullWidth
-              size="large"
-              onClick={handleEnroll}
-              sx={{ mb: 2 }}
-            >
-              {isAuthenticated ? 'Записаться на курс' : 'Войти для записи'}
-            </Button>
+            {!isCourseCreator() && (
+              <Button
+                variant="contained"
+                fullWidth
+                size="large"
+                onClick={handleEnroll}
+                sx={{ mb: 2 }}
+              >
+                {isAuthenticated ? 'Записаться на курс' : 'Войти для записи'}
+              </Button>
+            )}
             <List>
               <ListItem>
                 <ListItemText
@@ -195,7 +258,7 @@ const CourseDetail = () => {
               <ListItem>
                 <ListItemText
                   primary="Студентов"
-                  secondary={course.enrolledStudents || 0}
+                  secondary={Array.isArray(course.enrolledStudents) ? course.enrolledStudents.length : 0}
                 />
               </ListItem>
             </List>
@@ -203,21 +266,38 @@ const CourseDetail = () => {
 
           {/* Список уроков */}
           <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Содержание курса
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">
+                Содержание курса
+              </Typography>
+              {isAuthenticated && user?.role === 'teacher' && course?.instructor?._id === user._id && (
+                <Button
+                  variant="contained"
+                  startIcon={<Add />}
+                  onClick={() => navigate(`/courses/${course._id}/lessons/create`)}
+                >
+                  Добавить урок
+                </Button>
+              )}
+            </Box>
             <List>
-              {course.lessons?.map((lesson, index) => (
-                <React.Fragment key={lesson._id}>
-                  <ListItem>
-                    <ListItemText
-                      primary={`${index + 1}. ${lesson.title}`}
-                      secondary={`${lesson.duration} минут`}
-                    />
-                  </ListItem>
-                  {index < course.lessons.length - 1 && <Divider />}
-                </React.Fragment>
-              ))}
+              {Array.isArray(course?.lessons) ? (
+                course.lessons.map((lesson, index) => (
+                  <React.Fragment key={lesson?._id || index}>
+                    <ListItem>
+                      <ListItemText
+                        primary={`${index + 1}. ${lesson?.title || 'Урок ' + (index + 1)}`}
+                        secondary={lesson?.duration ? `${lesson.duration} минут` : ''}
+                      />
+                    </ListItem>
+                    {index < course.lessons.length - 1 && <Divider />}
+                  </React.Fragment>
+                ))
+              ) : (
+                <ListItem>
+                  <ListItemText primary="Уроки отсутствуют" />
+                </ListItem>
+              )}
             </List>
           </Paper>
         </Grid>
@@ -228,7 +308,7 @@ const CourseDetail = () => {
             <Typography variant="h6" gutterBottom>
               Отзывы студентов
             </Typography>
-            {isAuthenticated && (
+            {isAuthenticated && !isCourseCreator() && (
               <Box component="form" onSubmit={handleReviewSubmit} sx={{ mb: 3 }}>
                 <Typography variant="subtitle1" gutterBottom>
                   Оставить отзыв

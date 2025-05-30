@@ -83,6 +83,20 @@ courseSchema.virtual('lessonCount').get(function() {
     return this.lessons.length;
 });
 
+// Метод для подсчета общей длительности курса
+courseSchema.methods.calculateTotalDuration = async function() {
+    const Lesson = mongoose.model('Lesson');
+    const lessons = await Lesson.find({ _id: { $in: this.lessons } });
+    this.totalDuration = lessons.reduce((total, lesson) => total + lesson.duration, 0);
+    return this.totalDuration;
+};
+
+// Предсохранный хук для подсчета общей длительности
+courseSchema.pre('save', async function(next) {
+    await this.calculateTotalDuration();
+    next();
+});
+
 // Виртуальное поле для количества студентов
 courseSchema.virtual('studentCount').get(function() {
     return this.enrolledStudents.length;

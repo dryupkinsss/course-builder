@@ -17,7 +17,8 @@ import {
   TextField,
   Alert,
   CircularProgress,
-  Chip
+  Chip,
+  LinearProgress
 } from '@mui/material';
 import {
   PlayArrow as PlayIcon,
@@ -28,7 +29,8 @@ import {
   Link as LinkIcon,
   Edit as EditIcon,
   ArrowBack as ArrowBackIcon,
-  ArrowForward as ArrowForwardIcon
+  ArrowForward as ArrowForwardIcon,
+  AttachFile as AttachFileIcon
 } from '@mui/icons-material';
 import { lessonsAPI, coursesAPI } from '../../services/api';
 
@@ -36,44 +38,104 @@ const LessonDetail = () => {
   const { courseId, lessonId } = useParams();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useSelector((state) => state.auth);
+  
+  // Инициализация состояния с безопасными значениями по умолчанию
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [course, setCourse] = useState(null);
+  const [error, setError] = useState(null);
+  const [course, setCourse] = useState({ lessons: [] });
   const [lesson, setLesson] = useState(null);
-  const [currentLessonIndex, setCurrentLessonIndex] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [currentLessonIndex, setCurrentLessonIndex] = useState(-1);
   const [comment, setComment] = useState('');
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    fetchData();
-  }, [courseId, lessonId]);
+    let isMounted = true;
 
-  const fetchData = async () => {
-    try {
-      const [courseResponse, lessonResponse] = await Promise.all([
-        coursesAPI.getById(courseId),
-        lessonsAPI.getById(lessonId)
-      ]);
-      
-      setCourse(courseResponse.data);
-      setLesson(lessonResponse.data);
-      
-      // Находим индекс текущего урока
-      const index = courseResponse.data.lessons.findIndex(l => l._id === lessonId);
-      setCurrentLessonIndex(index);
-      
-      // Проверяем, пройден ли урок
-      if (isAuthenticated && user.role === 'student') {
-        const completedLessons = user.completedLessons || [];
-        setIsCompleted(completedLessons.includes(lessonId));
+    const fetchData = async () => {
+      if (!courseId || !lessonId) {
+        setError('Отсутствует ID курса или урока');
+        setLoading(false);
+        return;
       }
-      
-      setLoading(false);
-    } catch (err) {
-      setError('Ошибка при загрузке данных');
-      setLoading(false);
-    }
-  };
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        console.log('Starting to fetch lesson data...', { courseId, lessonId });
+        const lessonResponse = await lessonsAPI.getById(lessonId);
+        console.log('Lesson response:', lessonResponse);
+        
+        if (!isMounted) return;
+
+        if (!lessonResponse?.data) {
+          throw new Error('Не удалось загрузить данные урока');
+        }
+
+        const lessonData = lessonResponse.data;
+        console.log('Lesson data:', lessonData);
+
+        if (!lessonData?.course) {
+          throw new Error('Данные курса отсутствуют в ответе');
+        }
+
+        const courseData = lessonData.course;
+        console.log('Course data:', courseData);
+
+        // Проверяем структуру данных
+        if (!Array.isArray(courseData?.lessons)) {
+          console.error('Lessons array is missing or invalid in course data:', courseData);
+          throw new Error('Отсутствует список уроков в данных курса');
+        }
+
+        // Находим индекс текущего урока
+        const lessonIndex = courseData.lessons.findIndex(l => l?._id === lessonId);
+        console.log('Found lesson index:', lessonIndex);
+        
+        if (isMounted) {
+          console.log('Setting state with:', {
+            course: courseData,
+            lesson: lessonData,
+            isCompleted: lessonData.isCompleted || false,
+            currentLessonIndex: lessonIndex
+          });
+          
+          setCourse(courseData);
+          setLesson(lessonData);
+          setIsCompleted(lessonData.isCompleted || false);
+          setCurrentLessonIndex(lessonIndex);
+
+          // Получаем прогресс по уроку
+          const progressResponse = await coursesAPI.getStudentProgress(
+            user._id,
+            courseData
+          );
+          const lessonProgress = progressResponse.data.lessons.find(
+            l => l._id === lessonData._id
+          );
+          if (lessonProgress) {
+            setProgress(lessonProgress.progress);
+          }
+        }
+      } catch (err) {
+        console.error('Ошибка при загрузке данных:', err);
+        if (isMounted) {
+          setError(err.response?.data?.message || err.message || 'Произошла ошибка при загрузке данных');
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [courseId, lessonId]);
 
   const handleCommentSubmit = (e) => {
     e.preventDefault();
@@ -94,250 +156,361 @@ const LessonDetail = () => {
   };
 
   const navigateToLesson = (index) => {
+    if (!course?.lessons || !Array.isArray(course.lessons)) {
+      console.error('Невозможно выполнить навигацию: отсутствуют данные курса или уроков');
+      return;
+    }
+
     if (index >= 0 && index < course.lessons.length) {
-      navigate(`/courses/${courseId}/lessons/${course.lessons[index]._id}`);
+      const lesson = course.lessons[index];
+      if (lesson?._id) {
+        navigate(`/courses/${courseId}/lessons/${lesson._id}`);
+      }
     }
   };
 
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
+  function getVideoUrl(path) {
+    if (!path) return '';
+    let cleanPath = path.replace(/^\\+|^\/+/g, '');
+    cleanPath = cleanPath.replace(/\\\\/g, '/').replace(/\\/g, '/');
+    return `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/${cleanPath}`;
   }
 
-  if (!course || !lesson) {
-    return (
-      <Container>
-        <Alert severity="error" sx={{ mt: 4 }}>
-          Урок не найден
-        </Alert>
-      </Container>
-    );
-  }
+  const renderLessonsList = () => {
+    if (!Array.isArray(course?.lessons)) {
+      console.error('Lessons is not an array:', course?.lessons);
+      return (
+        <ListItem>
+          <ListItemText primary="Ошибка формата данных" />
+        </ListItem>
+      );
+    }
 
-  const isTeacher = isAuthenticated && user.role === 'teacher';
-  const isStudent = isAuthenticated && user.role === 'student';
+    if (course.lessons.length === 0) {
+      return (
+        <ListItem>
+          <ListItemText primary="Уроки отсутствуют" />
+        </ListItem>
+      );
+    }
 
-  return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
-        <IconButton onClick={() => navigate(`/courses/${courseId}`)}>
-          <ArrowBackIcon />
-        </IconButton>
-        <Typography variant="h4">
-          {lesson.title}
-        </Typography>
-        {isTeacher && (
-          <Button
-            variant="outlined"
-            startIcon={<EditIcon />}
-            onClick={() => navigate(`/courses/${courseId}/lessons/${lessonId}/edit`)}
+    return course.lessons.map((l, index) => {
+      if (!l?._id) {
+        console.error('Invalid lesson data:', l);
+        return null;
+      }
+
+      return (
+        <React.Fragment key={l._id}>
+          <ListItem
+            button
+            selected={l._id === lessonId}
+            onClick={() => navigateToLesson(index)}
           >
-            Редактировать
-          </Button>
-        )}
-      </Box>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
-      )}
-
-      <Grid container spacing={4}>
-        <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 2, mb: 3 }}>
-            <Box sx={{ position: 'relative', paddingTop: '56.25%' }}>
-              <video
-                controls
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%'
-                }}
-                src={lesson.videoUrl}
-              />
-            </Box>
-          </Paper>
-
-          <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Описание урока
-            </Typography>
-            <Typography variant="body1" paragraph>
-              {lesson.description}
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <Chip
-                icon={<PlayIcon />}
-                label={`${lesson.duration} минут`}
-                variant="outlined"
-              />
-              {isCompleted && (
-                <Chip
-                  icon={<CheckIcon />}
-                  label="Пройден"
-                  color="success"
+            <ListItemIcon>
+              {l._id === lessonId ? (
+                <PlayIcon color="primary" />
+              ) : (
+                <CheckIcon
+                  color={user?.completedLessons?.includes(l._id)
+                    ? 'success'
+                    : 'disabled'
+                  }
                 />
               )}
-            </Box>
-          </Paper>
+            </ListItemIcon>
+            <ListItemText
+              primary={l.title || 'Урок ' + (index + 1)}
+              secondary={l.duration ? `${l.duration} минут` : ''}
+            />
+          </ListItem>
+          {index < course.lessons.length - 1 && <Divider />}
+        </React.Fragment>
+      );
+    }).filter(Boolean);
+  };
 
-          {lesson.resources && lesson.resources.length > 0 && (
+  const updateProgress = async (newProgress) => {
+    try {
+      await coursesAPI.updateLessonProgress(course.course, lessonId, newProgress);
+      setProgress(newProgress);
+    } catch (err) {
+      setError('Ошибка при обновлении прогресса');
+    }
+  };
+
+  const renderContent = () => {
+    console.log('Rendering content with state:', {
+      loading,
+      error,
+      course,
+      lesson,
+      currentLessonIndex
+    });
+
+    if (loading) {
+      return (
+        <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
+          <CircularProgress />
+        </Box>
+      );
+    }
+
+    if (error) {
+      return (
+        <Box p={3}>
+          <Alert severity="error">{error}</Alert>
+        </Box>
+      );
+    }
+
+    if (!lesson?.title) {
+      console.log('Lesson data is missing or invalid:', lesson);
+      return (
+        <Box p={3}>
+          <Alert severity="warning">Урок не найден</Alert>
+        </Box>
+      );
+    }
+
+    const isTeacher = isAuthenticated && user?.role === 'teacher';
+    const isStudent = isAuthenticated && user?.role === 'student';
+    const hasNextLesson = currentLessonIndex < (course?.lessons?.length || 0) - 1;
+    const hasPrevLesson = currentLessonIndex > 0;
+
+    return (
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
+          <IconButton onClick={() => navigate(`/courses/${courseId}`)}>
+            <ArrowBackIcon />
+          </IconButton>
+          <Typography variant="h4">
+            {lesson.title}
+          </Typography>
+          {isTeacher && (
+            <Button
+              variant="outlined"
+              startIcon={<EditIcon />}
+              onClick={() => navigate(`/courses/${courseId}/lessons/${lessonId}/edit`)}
+            >
+              Редактировать
+            </Button>
+          )}
+        </Box>
+
+        <Grid container spacing={4}>
+          <Grid item xs={12} md={8}>
+            <Paper sx={{ p: 2, mb: 3 }}>
+              {lesson.video ? (
+                <Box sx={{ position: 'relative', paddingTop: '56.25%' }}>
+                  <video
+                    controls
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%'
+                    }}
+                    src={getVideoUrl(lesson.video)}
+                  />
+                </Box>
+              ) : (
+                <Box mb={3}>
+                  <Alert severity="info">
+                    Видео для этого урока отсутствует
+                  </Alert>
+                </Box>
+              )}
+            </Paper>
+
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Описание урока
+              </Typography>
+              <Typography variant="body1" paragraph>
+                {lesson.description || 'Описание отсутствует'}
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                <Chip
+                  icon={<PlayIcon />}
+                  label={`${lesson.duration || 0} минут`}
+                  variant="outlined"
+                />
+                {isCompleted && (
+                  <Chip
+                    icon={<CheckIcon />}
+                    label="Пройден"
+                    color="success"
+                  />
+                )}
+              </Box>
+            </Paper>
+
+            {Array.isArray(lesson.resources) && lesson.resources.length > 0 && (
+              <Paper sx={{ p: 3 }}>
+                <Typography variant="h6" gutterBottom>
+                  Дополнительные ресурсы
+                </Typography>
+                <List>
+                  {lesson.resources.map((resource, index) => (
+                    <ListItem key={index}>
+                      <ListItemIcon>
+                        <LinkIcon />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={resource}
+                        secondary="Ссылка на ресурс"
+                      />
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        href={resource}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Открыть
+                      </Button>
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            )}
+          </Grid>
+
+          <Grid item xs={12} md={4}>
             <Paper sx={{ p: 3 }}>
               <Typography variant="h6" gutterBottom>
-                Дополнительные ресурсы
+                Навигация по урокам
               </Typography>
               <List>
-                {lesson.resources.map((resource, index) => (
-                  <ListItem key={index}>
-                    <ListItemIcon>
-                      <LinkIcon />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={resource}
-                      secondary="Ссылка на ресурс"
-                    />
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      href={resource}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Открыть
-                    </Button>
-                  </ListItem>
-                ))}
+                {renderLessonsList()}
               </List>
             </Paper>
+          </Grid>
+        </Grid>
+
+        <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-between' }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigateToLesson(currentLessonIndex - 1)}
+            disabled={!hasPrevLesson}
+          >
+            Предыдущий урок
+          </Button>
+          {isStudent && !isCompleted && (
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleComplete}
+            >
+              Отметить как пройденный
+            </Button>
           )}
-        </Grid>
+          <Button
+            variant="outlined"
+            endIcon={<ArrowForwardIcon />}
+            onClick={() => navigateToLesson(currentLessonIndex + 1)}
+            disabled={!hasNextLesson}
+          >
+            Следующий урок
+          </Button>
+        </Box>
 
-        <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Навигация по урокам
-            </Typography>
-            <List>
-              {course.lessons.map((l, index) => (
-                <React.Fragment key={l._id}>
-                  <ListItem
-                    button
-                    selected={l._id === lessonId}
-                    onClick={() => navigateToLesson(index)}
-                  >
-                    <ListItemIcon>
-                      {l._id === lessonId ? (
-                        <PlayIcon color="primary" />
-                      ) : (
-                        <CheckIcon
-                          color={user?.completedLessons?.includes(l._id)
-                            ? 'success'
-                            : 'disabled'
-                          }
-                        />
-                      )}
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={l.title}
-                      secondary={`${l.duration} минут`}
-                    />
-                  </ListItem>
-                  {index < course.lessons.length - 1 && <Divider />}
-                </React.Fragment>
-              ))}
-            </List>
-          </Paper>
-        </Grid>
-      </Grid>
+        {/* Добавляем индикатор прогресса */}
+        <Box sx={{ mt: 3, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            Прогресс прохождения урока
+          </Typography>
+          <LinearProgress 
+            variant="determinate" 
+            value={progress} 
+            sx={{ height: 10, borderRadius: 5, mb: 1 }}
+          />
+          <Typography variant="body2" color="text.secondary" align="right">
+            {progress}%
+          </Typography>
+        </Box>
 
-      <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-between' }}>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigateToLesson(currentLessonIndex - 1)}
-          disabled={currentLessonIndex === 0}
-        >
-          Предыдущий урок
-        </Button>
-        {isStudent && !isCompleted && (
+        {/* Добавляем кнопки для обновления прогресса */}
+        <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
           <Button
             variant="contained"
-            color="primary"
-            onClick={handleComplete}
+            onClick={() => updateProgress(Math.min(progress + 25, 100))}
+            disabled={progress >= 100}
+          >
+            Отметить как частично пройденный
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={() => updateProgress(100)}
+            disabled={progress >= 100}
           >
             Отметить как пройденный
           </Button>
-        )}
-        <Button
-          variant="outlined"
-          endIcon={<ArrowForwardIcon />}
-          onClick={() => navigateToLesson(currentLessonIndex + 1)}
-          disabled={currentLessonIndex === course.lessons.length - 1}
-        >
-          Следующий урок
-        </Button>
-      </Box>
-
-      <Paper sx={{ p: 3, mt: 4 }}>
-        <Typography variant="h6" gutterBottom>
-          Комментарии
-        </Typography>
-        <List>
-          {lesson.comments.map((comment, index) => (
-            <React.Fragment key={index}>
-              <ListItem alignItems="flex-start">
-                <ListItemIcon>
-                  <CommentIcon />
-                </ListItemIcon>
-                <ListItemText
-                  primary={comment.user}
-                  secondary={
-                    <>
-                      <Typography
-                        component="span"
-                        variant="body2"
-                        color="text.primary"
-                      >
-                        {comment.text}
-                      </Typography>
-                      <br />
-                      {comment.date}
-                    </>
-                  }
-                />
-              </ListItem>
-              {index < lesson.comments.length - 1 && <Divider />}
-            </React.Fragment>
-          ))}
-        </List>
-        <Box component="form" onSubmit={handleCommentSubmit} sx={{ mt: 2 }}>
-          <TextField
-            fullWidth
-            multiline
-            rows={2}
-            placeholder="Оставьте комментарий..."
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            sx={{ mb: 1 }}
-          />
-          <Button
-            type="submit"
-            variant="contained"
-            endIcon={<SendIcon />}
-            disabled={!comment.trim()}
-          >
-            Отправить
-          </Button>
         </Box>
-      </Paper>
-    </Container>
-  );
+
+        {Array.isArray(lesson.comments) && lesson.comments.length > 0 && (
+          <Paper sx={{ p: 3, mt: 4 }}>
+            <Typography variant="h6" gutterBottom>
+              Комментарии
+            </Typography>
+            <List>
+              {lesson.comments.map((comment, index) => (
+                <React.Fragment key={index}>
+                  <ListItem alignItems="flex-start">
+                    <ListItemIcon>
+                      <CommentIcon />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={comment.user}
+                      secondary={
+                        <>
+                          <Typography
+                            component="span"
+                            variant="body2"
+                            color="text.primary"
+                          >
+                            {comment.text}
+                          </Typography>
+                          <br />
+                          {comment.date}
+                        </>
+                      }
+                    />
+                  </ListItem>
+                  {index < lesson.comments.length - 1 && <Divider />}
+                </React.Fragment>
+              ))}
+            </List>
+            <Box component="form" onSubmit={handleCommentSubmit} sx={{ mt: 2 }}>
+              <TextField
+                fullWidth
+                multiline
+                rows={2}
+                placeholder="Оставьте комментарий..."
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                sx={{ mb: 1 }}
+              />
+              <Button
+                type="submit"
+                variant="contained"
+                endIcon={<SendIcon />}
+                disabled={!comment.trim()}
+              >
+                Отправить
+              </Button>
+            </Box>
+          </Paper>
+        )}
+      </Container>
+    );
+  };
+
+  return renderContent();
 };
 
 export default LessonDetail; 
