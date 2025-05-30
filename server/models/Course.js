@@ -37,6 +37,10 @@ const courseSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Lesson'
     }],
+    quizzes: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Quiz'
+    }],
     enrolledStudents: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'

@@ -60,68 +60,40 @@ const LessonDetail = () => {
       }
 
       try {
-        setLoading(true);
-        setError(null);
+        const [courseResponse, lessonResponse] = await Promise.all([
+          coursesAPI.getById(courseId),
+          lessonsAPI.getById(lessonId)
+        ]);
 
-        console.log('Starting to fetch lesson data...', { courseId, lessonId });
-        const lessonResponse = await lessonsAPI.getById(lessonId);
-        console.log('Lesson response:', lessonResponse);
-        
-        if (!isMounted) return;
-
-        if (!lessonResponse?.data) {
-          throw new Error('Не удалось загрузить данные урока');
-        }
-
+        const courseData = courseResponse.data;
         const lessonData = lessonResponse.data;
-        console.log('Lesson data:', lessonData);
-
-        if (!lessonData?.course) {
-          throw new Error('Данные курса отсутствуют в ответе');
-        }
-
-        const courseData = lessonData.course;
-        console.log('Course data:', courseData);
-
-        // Проверяем структуру данных
-        if (!Array.isArray(courseData?.lessons)) {
-          console.error('Lessons array is missing or invalid in course data:', courseData);
-          throw new Error('Отсутствует список уроков в данных курса');
-        }
 
         // Находим индекс текущего урока
-        const lessonIndex = courseData.lessons.findIndex(l => l?._id === lessonId);
-        console.log('Found lesson index:', lessonIndex);
-        
+        const lessonIndex = courseData.lessons.findIndex(l => l._id === lessonId);
+
         if (isMounted) {
-          console.log('Setting state with:', {
-            course: courseData,
-            lesson: lessonData,
-            isCompleted: lessonData.isCompleted || false,
-            currentLessonIndex: lessonIndex
-          });
-          
           setCourse(courseData);
           setLesson(lessonData);
-          setIsCompleted(lessonData.isCompleted || false);
           setCurrentLessonIndex(lessonIndex);
 
           // Получаем прогресс по уроку
-          const progressResponse = await coursesAPI.getStudentProgress(
-            user._id,
-            courseData
-          );
-          const lessonProgress = progressResponse.data.lessons.find(
-            l => l._id === lessonData._id
-          );
-          if (lessonProgress) {
-            setProgress(lessonProgress.progress);
+          try {
+            const progressResponse = await coursesAPI.getStudentProgress(user._id, courseId);
+            const lessonProgress = progressResponse.data.lessons.find(
+              l => l._id === lessonId
+            );
+            if (lessonProgress) {
+              setProgress(lessonProgress.progress);
+              setIsCompleted(lessonProgress.status === 'completed');
+            }
+          } catch (err) {
+            console.error('Ошибка при получении прогресса:', err);
           }
         }
       } catch (err) {
         console.error('Ошибка при загрузке данных:', err);
         if (isMounted) {
-          setError(err.response?.data?.message || err.message || 'Произошла ошибка при загрузке данных');
+          setError(err.response?.data?.message || 'Произошла ошибка при загрузке данных');
         }
       } finally {
         if (isMounted) {
@@ -150,6 +122,9 @@ const LessonDetail = () => {
     try {
       await lessonsAPI.complete(lessonId);
       setIsCompleted(true);
+      
+      // Обновляем прогресс до 100%
+      await updateProgress(100);
     } catch (err) {
       setError('Ошибка при отметке урока как пройденного');
     }
@@ -173,7 +148,18 @@ const LessonDetail = () => {
     if (!path) return '';
     let cleanPath = path.replace(/^\\+|^\/+/g, '');
     cleanPath = cleanPath.replace(/\\\\/g, '/').replace(/\\/g, '/');
-    return `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/${cleanPath}`;
+    // Если путь уже начинается с uploads/, не добавляем ничего
+    if (!cleanPath.startsWith('uploads/')) {
+      // Если путь содержит videos/, добавляем uploads/ перед ним
+      if (cleanPath.startsWith('videos/')) {
+        cleanPath = 'uploads/' + cleanPath;
+      } else {
+        cleanPath = 'uploads/videos/' + cleanPath;
+      }
+    }
+    // Убираем /api из базового URL, если есть
+    const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/api$/, '');
+    return `${baseUrl}/${cleanPath}`;
   }
 
   const renderLessonsList = () => {
@@ -232,8 +218,13 @@ const LessonDetail = () => {
 
   const updateProgress = async (newProgress) => {
     try {
-      await coursesAPI.updateLessonProgress(course.course, lessonId, newProgress);
+      await coursesAPI.updateLessonProgress(courseId, lessonId, newProgress);
       setProgress(newProgress);
+      
+      // Если прогресс 100%, отмечаем урок как завершенный
+      if (newProgress === 100) {
+        await handleComplete();
+      }
     } catch (err) {
       setError('Ошибка при обновлении прогресса');
     }
@@ -433,8 +424,8 @@ const LessonDetail = () => {
           </Typography>
         </Box>
 
-        {/* Добавляем кнопки для обновления прогресса */}
-        <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+        {/* Кнопки для обновления прогресса */}
+        <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
           <Button
             variant="contained"
             onClick={() => updateProgress(Math.min(progress + 25, 100))}

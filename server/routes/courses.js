@@ -6,6 +6,9 @@ const { upload, handleUploadError } = require('../middlewares/upload');
 const fs = require('fs');
 const Lesson = require('../models/Lesson');
 const Progress = require('../models/Progress');
+const Quiz = require('../models/Quiz');
+const mongoose = require('mongoose');
+const path = require('path');
 
 // Получение всех курсов
 router.get('/', auth, async (req, res) => {
@@ -70,7 +73,8 @@ router.get('/:id', auth, async (req, res) => {
                 options: { sort: { order: 1 } }
             })
             .populate('instructor', 'name email')
-            .populate('enrolledStudents', 'name email');
+            .populate('enrolledStudents', 'name email')
+            .populate('quizzes');
 
         if (!course) {
             console.log('Course not found');
@@ -85,15 +89,16 @@ router.get('/:id', auth, async (req, res) => {
         });
 
         // Проверка доступа
-        const isEnrolled = course.enrolledStudents.some(student => {
-            const studentId = student._id.toString();
-            const userId = req.user._id.toString();
-            return studentId === userId;
-        });
-        const isInstructor = course.instructor._id.toString() === req.user._id.toString();
+        const userIdStr = req.user._id.toString();
+        const enrolledIds = course.enrolledStudents.map(s => s._id ? s._id.toString() : s.toString());
+        const isEnrolled = enrolledIds.includes(userIdStr);
+        const isInstructor = course.instructor._id ? course.instructor._id.toString() === userIdStr : course.instructor.toString() === userIdStr;
         const isPublished = course.isPublished;
 
-        if (!isEnrolled && !isInstructor && !isPublished) {
+        console.log('Access check:', { userIdStr, enrolledIds, isEnrolled, isInstructor, isPublished });
+
+        // Разрешаем просмотр любому, если курс опубликован
+        if (!isPublished && !isEnrolled && !isInstructor) {
             console.log('Access denied');
             return res.status(403).json({ message: 'Нет доступа' });
         }
@@ -119,6 +124,26 @@ router.get('/:id', auth, async (req, res) => {
             order: lesson.order || 0,
             video: lesson.video || '',
             description: lesson.description || ''
+        }));
+
+        // Убедимся, что quizzes - это массив
+        if (!Array.isArray(courseData.quizzes)) {
+            courseData.quizzes = [];
+        }
+
+        // Преобразуем тесты
+        courseData.quizzes = courseData.quizzes.map(quiz => ({
+            _id: quiz._id.toString(),
+            title: quiz.title || '',
+            description: quiz.description || '',
+            order: quiz.order || 0,
+            passingScore: quiz.passingScore || 1,
+            questions: (quiz.questions || []).map(q => ({
+                question: q.question,
+                type: q.type,
+                options: q.options,
+                correctOption: Array.isArray(q.options) ? q.options.findIndex(opt => opt.isCorrect) : 0
+            }))
         }));
 
         console.log('Sending course data:', {
@@ -177,7 +202,8 @@ router.post('/', auth, upload.fields([
             ...req.body,
             instructor: req.user._id,
             thumbnail: thumbnail.path,
-            lessons: [] // Начинаем с пустого массива уроков
+            lessons: [],
+            quizzes: []
         };
 
         const course = new Course(courseData);
@@ -186,10 +212,21 @@ router.post('/', auth, upload.fields([
         // Затем создаем уроки с привязкой к курсу
         const createdLessons = [];
         for (let i = 0; i < lessonsData.length; i++) {
+            let videoPath = lessonVideos[i].path;
+            const uploadsIndex = videoPath.lastIndexOf('uploads');
+            if (uploadsIndex !== -1) {
+                videoPath = videoPath.substring(uploadsIndex + 'uploads/'.length);
+            } else {
+                videoPath = path.basename(videoPath);
+            }
+            // Удаляем все ведущие videos/ (и слэши)
+            videoPath = videoPath.replace(/^videos[\/]+/, '');
+            // Добавляем только один раз videos/
+            videoPath = 'videos/' + path.basename(videoPath);
             const lessonData = {
                 ...lessonsData[i],
-                course: course._id, // Добавляем ID курса
-                video: lessonVideos[i].path,
+                course: course._id,
+                video: videoPath,
                 order: i + 1
             };
             const lesson = new Lesson(lessonData);
@@ -197,14 +234,42 @@ router.post('/', auth, upload.fields([
             createdLessons.push(lesson._id);
         }
 
-        // Обновляем курс с ID созданных уроков
         course.lessons = createdLessons;
-        await course.save();
 
-        // Возвращаем курс с заполненными данными уроков
+        // --- Создание тестов (Quiz) ---
+        let quizzesData = [];
+        if (typeof req.body.quizzes === 'string') {
+            try { quizzesData = JSON.parse(req.body.quizzes); } catch { quizzesData = []; }
+        } else if (Array.isArray(req.body.quizzes)) {
+            quizzesData = req.body.quizzes;
+        }
+        const createdQuizzes = [];
+        for (const quiz of quizzesData) {
+            const quizDoc = new Quiz({
+                title: quiz.title,
+                description: quiz.description || '',
+                questions: (quiz.questions || []).map(q => ({
+                    question: q.question,
+                    type: 'single',
+                    options: (q.options || []).map((opt, idx) => ({ text: opt, isCorrect: idx === q.correctOption })),
+                    points: 1
+                })),
+                passingScore: 1,
+                timeLimit: 0,
+                lesson: null // если нужен тест для всего курса, можно не указывать lesson
+            });
+            await quizDoc.save();
+            createdQuizzes.push(quizDoc._id);
+        }
+        course.quizzes = createdQuizzes;
+        await course.save();
+        // --- конец блока создания тестов ---
+
+        // Возвращаем курс с заполненными данными уроков и тестов
         const populatedCourse = await Course.findById(course._id)
             .populate('lessons')
-            .populate('instructor', 'name email');
+            .populate('instructor', 'name email')
+            .populate('quizzes');
 
         res.status(201).json(populatedCourse);
     } catch (error) {
@@ -233,94 +298,131 @@ router.post('/', auth, upload.fields([
 });
 
 // Обновление курса
-router.put('/:id', auth, upload.single('thumbnail'), handleUploadError, async (req, res) => {
-    try {
-        // Приведение массивов к правильному виду
-        if (typeof req.body.learningObjectives === 'string') {
-            try { req.body.learningObjectives = JSON.parse(req.body.learningObjectives); } catch { req.body.learningObjectives = []; }
-        }
-        if (typeof req.body.requirements === 'string') {
-            try { req.body.requirements = JSON.parse(req.body.requirements); } catch { req.body.requirements = []; }
-        }
-        if (typeof req.body.lessons === 'string') {
-            try { req.body.lessons = JSON.parse(req.body.lessons); } catch { req.body.lessons = []; }
-        }
-
-        const course = await Course.findById(req.params.id);
-        
-        if (!course) {
-            return res.status(404).json({ message: 'Курс не найден' });
-        }
-
-        if (course.instructor.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ message: 'Нет доступа' });
-        }
-
-        // Обновляем уроки
-        if (req.body.lessons) {
-            // Удаляем старые уроки, которых нет в новом списке
-            const oldLessonIds = course.lessons.map(lesson => lesson.toString());
-            const newLessonIds = req.body.lessons.map(lesson => lesson._id);
-            const lessonsToDelete = oldLessonIds.filter(id => !newLessonIds.includes(id));
-            
-            if (lessonsToDelete.length > 0) {
-                await Lesson.deleteMany({ _id: { $in: lessonsToDelete } });
-            }
-
-            // Обновляем или создаем новые уроки
-            for (const lessonData of req.body.lessons) {
-                if (lessonData._id) {
-                    // Обновляем существующий урок
-                    await Lesson.findByIdAndUpdate(lessonData._id, lessonData);
-                } else {
-                    // Создаем новый урок
-                    const newLesson = new Lesson({
-                        ...lessonData,
-                        course: course._id
-                    });
-                    await newLesson.save();
-                    course.lessons.push(newLesson._id);
-                }
-            }
-        }
-
-        // Обновляем остальные поля курса
-        const updateData = {
-            title: req.body.title,
-            description: req.body.description,
-            category: req.body.category,
-            level: req.body.level,
-            price: req.body.price,
-            requirements: req.body.requirements,
-            learningObjectives: req.body.learningObjectives
-        };
-
-        // Если загружена новая обложка, обновляем путь к ней
-        if (req.file) {
-            // Удаляем старую обложку, если она существует и не является дефолтной
-            if (course.thumbnail && course.thumbnail !== 'default-course.jpg') {
-                try {
-                    fs.unlinkSync(course.thumbnail);
-                } catch (err) {
-                    console.error('Ошибка при удалении старой обложки:', err);
-                }
-            }
-            updateData.thumbnail = req.file.path;
-        }
-
-        Object.assign(course, updateData);
-        await course.save();
-
-        // Возвращаем обновленный курс с популированными уроками
-        const updatedCourse = await Course.findById(course._id)
-            .populate('instructor', 'name email')
-            .populate('lessons');
-
-        res.json(updatedCourse);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Ошибка сервера' });
+router.put('/:id', auth, upload.fields([
+  { name: 'thumbnail', maxCount: 1 },
+  { name: 'lessonVideos', maxCount: 10 }
+]), async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.id);
+    if (!course) {
+      return res.status(404).json({ message: 'Курс не найден' });
     }
+
+    if (course.instructor.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Нет доступа' });
+    }
+
+    const { title, description, category, level, price, requirements, learningObjectives, lessons, quizzes } = req.body;
+
+    // Обновляем основные данные курса
+    course.title = title;
+    course.description = description;
+    course.category = category;
+    course.level = level;
+    course.price = price;
+    course.requirements = JSON.parse(requirements);
+    course.learningObjectives = JSON.parse(learningObjectives);
+
+    // Обновляем обложку, если она загружена
+    if (req.files && req.files.thumbnail) {
+      course.thumbnail = req.files.thumbnail[0].path;
+    }
+
+    // Удаляем старые уроки
+    await Lesson.deleteMany({ course: course._id });
+
+    // Создаем новые уроки из модулей
+    let parsedLessons = [];
+    try {
+      parsedLessons = JSON.parse(req.body.lessons || '[]');
+    } catch (e) {
+      parsedLessons = [];
+    }
+    for (let i = 0; i < parsedLessons.length; i++) {
+      const lessonData = parsedLessons[i];
+      let videoPath = null;
+      if (req.files && req.files.lessonVideos && req.files.lessonVideos[i]) {
+        videoPath = req.files.lessonVideos[i].path;
+      }
+      const lesson = new Lesson({
+        ...lessonData,
+        course: course._id,
+        video: videoPath,
+        order: i + 1
+      });
+      await lesson.save();
+    }
+
+    // Обновляем тесты
+    let parsedQuizzes = [];
+    try {
+      parsedQuizzes = JSON.parse(req.body.quizzes || '[]');
+    } catch (e) {
+      parsedQuizzes = [];
+    }
+    console.log('parsedQuizzes:', parsedQuizzes);
+
+    const updatedQuizzes = [];
+    for (let i = 0; i < parsedQuizzes.length; i++) {
+      const quizData = parsedQuizzes[i];
+      const { _id, ...quizDataWithoutId } = quizData;
+
+      // Привести структуру вопросов и опций к нужному виду
+      const questions = Array.isArray(quizDataWithoutId.questions)
+        ? quizDataWithoutId.questions.map(q => ({
+            question: q.question,
+            type: q.type || 'single',
+            options: Array.isArray(q.options)
+              ? q.options.map(opt =>
+                  typeof opt === 'object' && opt.text ? { text: opt.text, isCorrect: !!opt.isCorrect } : { text: String(opt), isCorrect: false }
+                )
+              : [],
+            correctOption: typeof q.correctOption === 'number' ? q.correctOption : 0
+          }))
+        : [];
+
+      let quiz;
+      if (_id) {
+        // Обновляем существующий тест
+        quiz = await Quiz.findById(_id);
+        if (quiz) {
+          quiz.title = quizDataWithoutId.title;
+          quiz.description = quizDataWithoutId.description;
+          quiz.questions = questions;
+          quiz.passingScore = quizDataWithoutId.passingScore || 1;
+          quiz.order = i + 1;
+          await quiz.save();
+        }
+      } else {
+        // Создаем новый тест, если _id не предоставлен
+        quiz = new Quiz({
+          ...quizDataWithoutId,
+          passingScore: quizDataWithoutId.passingScore || 1,
+          questions,
+          course: course._id,
+          order: i + 1
+        });
+        await quiz.save();
+      }
+      
+      if (quiz) {
+        updatedQuizzes.push(quiz._id);
+      }
+    }
+
+    // Удаляем тесты, которых нет в обновленном списке
+    await Quiz.deleteMany({
+      course: course._id,
+      _id: { $nin: updatedQuizzes }
+    });
+
+    course.quizzes = updatedQuizzes;
+    await course.save();
+    res.json(course);
+  } catch (error) {
+    console.error('Error updating course:', error);
+    res.status(500).json({ message: 'Ошибка при обновлении курса' });
+  }
 });
 
 // Удаление курса
@@ -332,11 +434,11 @@ router.delete('/:id', auth, async (req, res) => {
             return res.status(404).json({ message: 'Курс не найден' });
         }
 
-        if (course.instructor.toString() !== req.user._id) {
+        if (course.instructor.toString() !== req.user._id.toString()) {
             return res.status(403).json({ message: 'Нет доступа' });
         }
 
-        await course.remove();
+        await course.deleteOne();
         res.json({ message: 'Курс удален' });
     } catch (error) {
         console.error(error);
@@ -358,7 +460,8 @@ router.post('/:id/enroll', auth, async (req, res) => {
             return res.status(403).json({ message: 'Создатель курса не может записаться на свой курс' });
         }
 
-        if (course.enrolledStudents.includes(req.user._id)) {
+        // Исправленное сравнение!
+        if (course.enrolledStudents.some(id => id.toString() === req.user._id.toString())) {
             return res.status(400).json({ message: 'Вы уже записаны на этот курс' });
         }
 
@@ -458,14 +561,21 @@ router.get('/my/created', auth, async (req, res) => {
 router.get('/:courseId/students/:studentId/progress', auth, async (req, res) => {
   try {
     const { courseId, studentId } = req.params;
+    
+    // Проверяем, что courseId является валидным ObjectId
+    if (!mongoose.Types.ObjectId.isValid(courseId)) {
+      return res.status(400).json({ message: 'Неверный формат ID курса' });
+    }
+
     const course = await Course.findById(courseId);
 
     if (!course) {
       return res.status(404).json({ message: 'Курс не найден' });
     }
 
-    // Проверяем, является ли пользователь преподавателем курса
-    if (course.instructor.toString() !== req.user._id.toString()) {
+    // Проверяем, является ли пользователь преподавателем курса или самим студентом
+    if (course.instructor.toString() !== req.user._id.toString() && 
+        studentId !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Нет доступа' });
     }
 
@@ -484,13 +594,21 @@ router.get('/:courseId/students/:studentId/progress', auth, async (req, res) => 
         _id: lesson._id,
         title: lesson.title,
         progress: progress ? progress.progress : 0,
-        lastAccessed: progress ? progress.lastAccessed : null
+        status: progress ? progress.status : 'not_started',
+        lastAccessed: progress ? progress.lastAccessed : null,
+        completedAt: progress ? progress.completedAt : null
       };
     });
 
     const lessonsProgress = await Promise.all(progressPromises);
 
+    // Вычисляем общий прогресс по курсу
+    const totalProgress = lessonsProgress.reduce((acc, lesson) => acc + lesson.progress, 0) / lessons.length;
+
     res.json({
+      courseId,
+      studentId,
+      totalProgress,
       lessons: lessonsProgress
     });
   } catch (err) {
@@ -548,6 +666,126 @@ router.post('/:courseId/lessons/:lessonId/progress', auth, async (req, res) => {
   } catch (err) {
     console.error('Ошибка при обновлении прогресса:', err);
     res.status(500).json({ message: 'Ошибка сервера' });
+  }
+});
+
+// Обновление прогресса по уроку
+router.put('/:courseId/lessons/:lessonId/progress', auth, async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+    const { progress } = req.body;
+    const studentId = req.user._id;
+
+    // Проверяем, что курс существует
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: 'Курс не найден' });
+    }
+
+    // Проверяем, что урок существует в курсе
+    const lesson = course.lessons.find(l => l._id.toString() === lessonId);
+    if (!lesson) {
+      return res.status(404).json({ message: 'Урок не найден в курсе' });
+    }
+
+    // Проверяем, что студент зачислен на курс
+    const isEnrolled = course.enrolledStudents.includes(studentId);
+    if (!isEnrolled) {
+      return res.status(403).json({ message: 'Вы не зачислены на этот курс' });
+    }
+
+    // Обновляем или создаем запись о прогрессе
+    let progressDoc = await Progress.findOne({
+      student: studentId,
+      course: courseId,
+      lesson: lessonId
+    });
+
+    if (!progressDoc) {
+      progressDoc = new Progress({
+        student: studentId,
+        course: courseId,
+        lesson: lessonId,
+        progress: progress,
+        status: progress === 100 ? 'completed' : 'in_progress'
+      });
+    } else {
+      progressDoc.progress = progress;
+      if (progress === 100) {
+        progressDoc.status = 'completed';
+        progressDoc.completedAt = new Date();
+      }
+    }
+
+    await progressDoc.save();
+
+    res.json({
+      message: 'Прогресс успешно обновлен',
+      progress: progressDoc
+    });
+  } catch (error) {
+    console.error('Ошибка при обновлении прогресса:', error);
+    res.status(500).json({ message: 'Ошибка при обновлении прогресса' });
+  }
+});
+
+// Получение прогресса студента по курсу
+router.get('/:courseId/progress/:studentId', auth, async (req, res) => {
+  try {
+    const { courseId, studentId } = req.params;
+    const userId = req.user._id;
+
+    // Проверяем, что курс существует
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: 'Курс не найден' });
+    }
+
+    // Проверяем права доступа (преподаватель или сам студент)
+    const isInstructor = course.instructor.toString() === userId.toString();
+    const isStudent = studentId === userId.toString();
+    if (!isInstructor && !isStudent) {
+      return res.status(403).json({ message: 'Нет доступа к этой информации' });
+    }
+
+    // Получаем все уроки курса
+    const lessons = course.lessons;
+
+    // Получаем прогресс по каждому уроку
+    const progressPromises = lessons.map(async (lesson) => {
+      const progress = await Progress.findOne({
+        student: studentId,
+        course: courseId,
+        lesson: lesson._id
+      });
+
+      return {
+        _id: lesson._id,
+        title: lesson.title,
+        progress: progress ? progress.progress : 0,
+        status: progress ? progress.status : 'not_started',
+        lastAccessed: progress ? progress.updatedAt : null,
+        completedAt: progress ? progress.completedAt : null
+      };
+    });
+
+    const lessonsProgress = await Promise.all(progressPromises);
+
+    // Вычисляем общий прогресс по курсу
+    const totalProgress = lessonsProgress.reduce((acc, lesson) => acc + lesson.progress, 0) / lessons.length;
+
+    res.json({
+      course: {
+        _id: course._id,
+        title: course.title
+      },
+      student: studentId,
+      totalProgress: Math.round(totalProgress),
+      lessons: lessonsProgress
+    });
+  } catch (error) {
+    console.error('Ошибка при получении прогресса:', error);
+    res.status(500).json({ message: 'Ошибка при получении прогресса' });
   }
 });
 

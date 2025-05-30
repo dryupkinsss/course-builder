@@ -54,6 +54,13 @@ api.interceptors.response.use(
   }
 );
 
+function handleApiError(error) {
+  if (error.response && error.response.data && error.response.data.message) {
+    return new Error(error.response.data.message);
+  }
+  return new Error(error.message || 'Произошла ошибка при обращении к API');
+}
+
 export const authAPI = {
   login: (credentials) => api.post('/auth/login', credentials),
   register: (userData) => api.post('/auth/register', userData),
@@ -84,10 +91,20 @@ export const coursesAPI = {
   getEnrolledCourses: () => api.get('/courses/enrolled'),
   getTeacherCourses: () => api.get('/courses/my/created'),
   getStudentProgress: async (studentId, courseId) => {
-    return await api.get(`/courses/${courseId}/students/${studentId}/progress`);
+    try {
+      const response = await api.get(`/courses/${courseId}/progress/${studentId}`);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
   },
   updateLessonProgress: async (courseId, lessonId, progress) => {
-    return await api.post(`/courses/${courseId}/lessons/${lessonId}/progress`, { progress });
+    try {
+      const response = await api.put(`/courses/${courseId}/lessons/${lessonId}/progress`, { progress });
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
   }
 };
 

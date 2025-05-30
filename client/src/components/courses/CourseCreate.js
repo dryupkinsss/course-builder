@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
 import {
   Container,
   Paper,
@@ -17,7 +16,6 @@ import {
   IconButton,
   List,
   ListItem,
-  ListItemText,
   ListItemSecondaryAction,
   CircularProgress,
   Dialog,
@@ -25,7 +23,7 @@ import {
   DialogContent,
   DialogActions
 } from '@mui/material';
-import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
+import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { coursesAPI } from '../../services/api';
 
 const categories = [
@@ -44,9 +42,17 @@ const levels = [
 
 const CourseCreate = () => {
   const navigate = useNavigate();
-  const { user } = useSelector((state) => state.auth);
+  // Вернуть состояния для ошибок и загрузки
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Новый тип модуля
+  const emptyModule = (index) => ({
+    title: `Модуль ${index + 1}`,
+    lesson: null,
+    quiz: null
+  });
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -56,11 +62,17 @@ const CourseCreate = () => {
     thumbnail: null,
     requirements: [''],
     learningObjectives: [''],
-    lessons: []
+    lessons: [],
+    quizzes: []
   });
 
-  // Состояние для диалога создания урока
+  // Инициализация состояния для модулей
+  const [modules, setModules] = useState([]);
+  const [editingModuleIndex, setEditingModuleIndex] = useState(-1);
   const [lessonDialogOpen, setLessonDialogOpen] = useState(false);
+  const [quizDialogOpen, setQuizDialogOpen] = useState(false);
+  
+  // Инициализация состояния для текущего урока и теста
   const [currentLesson, setCurrentLesson] = useState({
     title: '',
     description: '',
@@ -69,7 +81,12 @@ const CourseCreate = () => {
     resources: [''],
     order: 1
   });
-  const [editingLessonIndex, setEditingLessonIndex] = useState(-1);
+  
+  const [currentQuiz, setCurrentQuiz] = useState({
+    title: '',
+    description: '',
+    questions: []
+  });
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -155,51 +172,103 @@ const CourseCreate = () => {
     });
   };
 
-  const openLessonDialog = (index = -1) => {
-    if (index >= 0) {
-      setCurrentLesson(formData.lessons[index]);
-      setEditingLessonIndex(index);
-    } else {
-      setCurrentLesson({
-        title: '',
-        description: '',
-        duration: '',
-        video: null,
-        resources: [''],
-        order: formData.lessons.length + 1
-      });
-      setEditingLessonIndex(-1);
-    }
+  const handleQuizChange = (field, value) => {
+    setCurrentQuiz(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleAddQuestion = () => {
+    setCurrentQuiz(prev => ({
+      ...prev,
+      questions: [
+        ...prev.questions,
+        { question: '', options: ['', '', '', ''], correctOption: 0 }
+      ]
+    }));
+  };
+
+  const handleQuestionChange = (qIdx, field, value) => {
+    setCurrentQuiz(prev => {
+      const questions = [...prev.questions];
+      questions[qIdx] = { ...questions[qIdx], [field]: value };
+      return { ...prev, questions };
+    });
+  };
+
+  const handleOptionChange = (qIdx, optIdx, value) => {
+    setCurrentQuiz(prev => {
+      const questions = [...prev.questions];
+      const options = [...questions[qIdx].options];
+      const currentOption = options[optIdx];
+      if (typeof currentOption === 'object') {
+        options[optIdx] = { ...currentOption, text: value };
+      } else {
+        options[optIdx] = value;
+      }
+      questions[qIdx] = { ...questions[qIdx], options };
+      return { ...prev, questions };
+    });
+  };
+
+  const handleCorrectOptionChange = (qIdx, value) => {
+    setCurrentQuiz(prev => {
+      const questions = [...prev.questions];
+      questions[qIdx] = { ...questions[qIdx], correctOption: value };
+      return { ...prev, questions };
+    });
+  };
+
+  // Добавить модуль
+  const handleAddModule = () => {
+    setModules([...modules, emptyModule(modules.length)]);
+  };
+
+  // Открыть форму лекции для модуля
+  const handleOpenLesson = (idx) => {
+    setEditingModuleIndex(idx);
+    setCurrentLesson(modules[idx].lesson || {
+      title: '', description: '', duration: '', video: null, resources: [''], order: 1
+    });
     setLessonDialogOpen(true);
   };
 
-  const handleLessonSubmit = () => {
-    if (!currentLesson.title || !currentLesson.description || !currentLesson.duration || !currentLesson.video) {
-      setError('Пожалуйста, заполните все обязательные поля урока');
-      return;
-    }
-
-    const newLessons = [...formData.lessons];
-    if (editingLessonIndex >= 0) {
-      newLessons[editingLessonIndex] = currentLesson;
-    } else {
-      newLessons.push(currentLesson);
-    }
-
-    setFormData({
-      ...formData,
-      lessons: newLessons
+  // Открыть форму теста для модуля
+  const handleOpenQuiz = (idx) => {
+    setEditingModuleIndex(idx);
+    setCurrentQuiz(modules[idx].quiz || {
+      title: '', questions: []
     });
+    setQuizDialogOpen(true);
+  };
 
+  // Сохранить лекцию в модуле
+  const handleSaveLesson = () => {
+    const newModules = [...modules];
+    newModules[editingModuleIndex].lesson = currentLesson;
+    setModules(newModules);
     setLessonDialogOpen(false);
   };
 
-  const removeLesson = (index) => {
-    const newLessons = formData.lessons.filter((_, i) => i !== index);
-    setFormData({
-      ...formData,
-      lessons: newLessons
-    });
+  // Сохранить тест в модуле
+  const handleSaveQuiz = () => {
+    const newModules = [...modules];
+    newModules[editingModuleIndex].quiz = {
+      ...currentQuiz,
+      order: editingModuleIndex + 1
+    };
+    setModules(newModules);
+    setQuizDialogOpen(false);
+  };
+
+  // Удалить модуль
+  const handleRemoveModule = (idx) => {
+    setModules(modules.filter((_, i) => i !== idx));
+  };
+
+  // Преобразование для бэкенда
+  const prepareDataForBackend = () => {
+    const lessons = modules.map((m, i) => m.lesson ? { ...m.lesson, order: i + 1 } : null).filter(Boolean);
+    const quizzes = modules.map((m, i) => m.quiz ? { ...m.quiz, order: i + 1 } : null).filter(Boolean);
+    return { ...formData, lessons, quizzes };
   };
 
   const handleSubmit = async (e) => {
@@ -220,37 +289,40 @@ const CourseCreate = () => {
       return;
     }
 
-    if (formData.lessons.length === 0) {
-      setError('Пожалуйста, добавьте хотя бы один урок');
+    // Новая валидация для модулей
+    if (!modules.some(m => m.lesson || m.quiz)) {
+      setError('Пожалуйста, добавьте хотя бы один модуль с лекцией или тестом');
       setLoading(false);
       return;
     }
 
     try {
       const formDataToSend = new FormData();
-      Object.keys(formData).forEach(key => {
+      Object.keys(prepareDataForBackend()).forEach(key => {
         if (key === 'requirements' || key === 'learningObjectives') {
-          formDataToSend.append(key, JSON.stringify(formData[key]));
+          formDataToSend.append(key, JSON.stringify(prepareDataForBackend()[key]));
         } else if (key === 'price') {
-          formDataToSend.append(key, Number(formData[key]));
-        } else if (key === 'thumbnail' && formData[key]) {
-          formDataToSend.append('thumbnail', formData[key]);
+          formDataToSend.append(key, Number(prepareDataForBackend()[key]));
+        } else if (key === 'thumbnail' && prepareDataForBackend()[key]) {
+          formDataToSend.append('thumbnail', prepareDataForBackend()[key]);
         } else if (key === 'lessons') {
           // Добавляем уроки без видео
-          const lessonsWithoutVideos = formData[key].map(lesson => ({
+          const lessonsWithoutVideos = prepareDataForBackend()[key].map(lesson => ({
             ...lesson,
             video: null
           }));
           formDataToSend.append(key, JSON.stringify(lessonsWithoutVideos));
           
           // Добавляем видео уроков
-          formData[key].forEach((lesson, index) => {
+          prepareDataForBackend()[key].forEach((lesson, index) => {
             if (lesson.video) {
               formDataToSend.append('lessonVideos', lesson.video);
             }
           });
+        } else if (key === 'quizzes') {
+          formDataToSend.append('quizzes', JSON.stringify(prepareDataForBackend()[key]));
         } else if (key !== 'thumbnail') {
-          formDataToSend.append(key, formData[key]);
+          formDataToSend.append(key, prepareDataForBackend()[key]);
         }
       });
 
@@ -440,40 +512,40 @@ const CourseCreate = () => {
           </Button>
 
           <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
-            Уроки курса
+            Управление модулями
           </Typography>
-          <List>
-            {formData.lessons.map((lesson, index) => (
-              <ListItem key={index}>
-                <ListItemText
-                  primary={`${index + 1}. ${lesson.title}`}
-                  secondary={`${lesson.duration} минут`}
-                />
-                <ListItemSecondaryAction>
-                  <IconButton
-                    edge="end"
-                    onClick={() => openLessonDialog(index)}
-                    sx={{ mr: 1 }}
-                  >
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton
-                    edge="end"
-                    onClick={() => removeLesson(index)}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
-          </List>
-          <Button
-            startIcon={<AddIcon />}
-            onClick={() => openLessonDialog()}
-            sx={{ mb: 3 }}
-          >
-            Добавить урок
+          <Button variant="contained" onClick={handleAddModule} sx={{ mb: 2 }}>
+            Добавить модуль
           </Button>
+          {modules.length === 0 && (
+            <Alert severity="info">Добавьте хотя бы один модуль</Alert>
+          )}
+          {modules.map((mod, idx) => (
+            <Paper key={idx} sx={{ mb: 2, p: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography variant="subtitle1">{mod.title}</Typography>
+                <Button color="error" onClick={() => handleRemoveModule(idx)}>Удалить модуль</Button>
+              </Box>
+              <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+                <Button variant="outlined" onClick={() => handleOpenLesson(idx)}>
+                  {mod.lesson ? 'Редактировать лекцию' : 'Добавить лекцию'}
+                </Button>
+                <Button variant="outlined" onClick={() => handleOpenQuiz(idx)}>
+                  {mod.quiz ? 'Редактировать тест' : 'Добавить тест'}
+                </Button>
+              </Box>
+              {mod.lesson && (
+                <Box sx={{ mt: 2, ml: 2 }}>
+                  <Typography variant="body2">Лекция: {mod.lesson.title}</Typography>
+                </Box>
+              )}
+              {mod.quiz && (
+                <Box sx={{ mt: 1, ml: 2 }}>
+                  <Typography variant="body2">Тест: {mod.quiz.title}</Typography>
+                </Box>
+              )}
+            </Paper>
+          ))}
 
           <Box sx={{ mt: 4, display: 'flex', gap: 2 }}>
             <Button
@@ -495,16 +567,9 @@ const CourseCreate = () => {
         </form>
       </Paper>
 
-      {/* Диалог создания/редактирования урока */}
-      <Dialog
-        open={lessonDialogOpen}
-        onClose={() => setLessonDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          {editingLessonIndex >= 0 ? 'Редактирование урока' : 'Создание нового урока'}
-        </DialogTitle>
+      {/* Диалоги для лекции и теста */}
+      <Dialog open={lessonDialogOpen} onClose={() => setLessonDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Лекция</DialogTitle>
         <DialogContent>
           <TextField
             fullWidth
@@ -597,12 +662,59 @@ const CourseCreate = () => {
           </Button>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setLessonDialogOpen(false)}>
-            Отмена
-          </Button>
-          <Button onClick={handleLessonSubmit} variant="contained">
-            {editingLessonIndex >= 0 ? 'Сохранить' : 'Добавить'}
-          </Button>
+          <Button onClick={() => setLessonDialogOpen(false)}>Отмена</Button>
+          <Button onClick={handleSaveLesson} variant="contained">Сохранить</Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={quizDialogOpen} onClose={() => setQuizDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Тест</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Название теста"
+            value={currentQuiz.title}
+            onChange={e => handleQuizChange('title', e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+          />
+          {currentQuiz.questions.map((q, qIdx) => (
+            <Box key={qIdx} sx={{ mb: 2, pl: 2, borderLeft: '2px solid #eee' }}>
+              <TextField
+                label={`Вопрос ${qIdx + 1}`}
+                value={q.question}
+                onChange={e => handleQuestionChange(qIdx, 'question', e.target.value)}
+                fullWidth
+                sx={{ mb: 1 }}
+              />
+              {q.options.map((opt, optIdx) => (
+                <TextField
+                  key={optIdx}
+                  label={`Вариант ${optIdx + 1}`}
+                  value={typeof opt === 'object' ? opt.text : opt}
+                  onChange={e => handleOptionChange(qIdx, optIdx, e.target.value)}
+                  sx={{ mr: 1, mb: 1, width: '45%' }}
+                />
+              ))}
+              <TextField
+                select
+                label="Правильный вариант"
+                value={q.correctOption}
+                onChange={e => handleCorrectOptionChange(qIdx, Number(e.target.value))}
+                SelectProps={{ native: true }}
+                sx={{ width: 200 }}
+              >
+                {q.options.map((opt, idx) => (
+                  <option key={idx} value={idx}>
+                    {typeof opt === 'object' ? opt.text : opt || `Вариант ${idx + 1}`}
+                  </option>
+                ))}
+              </TextField>
+            </Box>
+          ))}
+          <Button variant="outlined" onClick={handleAddQuestion} sx={{ mt: 1 }}>Добавить вопрос</Button>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setQuizDialogOpen(false)}>Отмена</Button>
+          <Button onClick={handleSaveQuiz} variant="contained">Сохранить</Button>
         </DialogActions>
       </Dialog>
     </Container>

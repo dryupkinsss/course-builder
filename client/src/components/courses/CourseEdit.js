@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
 import {
   Container,
   Paper,
@@ -21,11 +20,10 @@ import {
   DialogActions,
   List,
   ListItem,
-  ListItemText,
   ListItemSecondaryAction,
   IconButton
 } from '@mui/material';
-import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
+import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { coursesAPI } from '../../services/api';
 
 const categories = [
@@ -46,7 +44,6 @@ const CourseEdit = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     title: '',
@@ -57,11 +54,21 @@ const CourseEdit = () => {
     thumbnail: null,
     requirements: [''],
     learningObjectives: [''],
-    lessons: []
+    lessons: [],
+    quizzes: []
   });
 
-  // Состояние для диалога создания/редактирования урока
+  // Новый тип модуля
+  const emptyModule = (index) => ({
+    title: `Модуль ${index + 1}`,
+    lesson: null,
+    quiz: null
+  });
+
+  const [modules, setModules] = useState([]);
+  const [editingModuleIndex, setEditingModuleIndex] = useState(-1);
   const [lessonDialogOpen, setLessonDialogOpen] = useState(false);
+  const [quizDialogOpen, setQuizDialogOpen] = useState(false);
   const [currentLesson, setCurrentLesson] = useState({
     title: '',
     description: '',
@@ -70,7 +77,11 @@ const CourseEdit = () => {
     resources: [''],
     order: 1
   });
-  const [editingLessonIndex, setEditingLessonIndex] = useState(-1);
+  const [currentQuiz, setCurrentQuiz] = useState({
+    title: '',
+    description: '',
+    questions: []
+  });
 
   useEffect(() => {
     const fetchCourse = async () => {
@@ -95,18 +106,46 @@ const CourseEdit = () => {
           thumbnail: course.thumbnail || null,
           requirements: Array.isArray(course.requirements) ? course.requirements : [''],
           learningObjectives: Array.isArray(course.learningObjectives) ? course.learningObjectives : [''],
-          lessons: Array.isArray(course.lessons) ? course.lessons : []
+          lessons: Array.isArray(course.lessons) ? course.lessons : [],
+          quizzes: Array.isArray(course.quizzes) ? course.quizzes : []
         };
 
-        console.log('Setting form data:', newFormData);
+        // Формируем modules из lessons и quizzes
+        const lessons = Array.isArray(course.lessons) ? course.lessons : [];
+        const quizzes = Array.isArray(course.quizzes) ? course.quizzes : [];
+        
+        // Создаем модули на основе уроков
+        const loadedModules = lessons.map((lesson, index) => ({
+          title: `Модуль ${index + 1}`,
+          lesson,
+          quiz: null
+        }));
+
+        // Добавляем тесты в соответствующие модули
+        quizzes.forEach(quiz => {
+          const moduleIndex = quiz.order > 0 ? quiz.order - 1 : 0;
+          if (loadedModules[moduleIndex]) {
+            loadedModules[moduleIndex].quiz = quiz;
+          } else {
+            // Если модуля нет, создаем новый
+            loadedModules.push({
+              title: `Модуль ${moduleIndex + 1}`,
+              lesson: null,
+              quiz
+            });
+          }
+        });
+
+        setModules(loadedModules);
         setFormData(newFormData);
       } catch (err) {
-        console.error('Error loading course:', err);
+        console.error('Error fetching course:', err);
         setError('Ошибка при загрузке курса');
       } finally {
         setLoading(false);
       }
     };
+
     fetchCourse();
   }, [id]);
 
@@ -192,7 +231,7 @@ const CourseEdit = () => {
         ...lesson,
         resources: Array.isArray(lesson.resources) ? lesson.resources : ['']
       });
-      setEditingLessonIndex(index);
+      setEditingModuleIndex(index);
     } else {
       setCurrentLesson({
         title: '',
@@ -202,44 +241,9 @@ const CourseEdit = () => {
         resources: [''],
         order: formData.lessons.length + 1
       });
-      setEditingLessonIndex(-1);
+      setEditingModuleIndex(-1);
     }
     setLessonDialogOpen(true);
-  };
-
-  const handleLessonSubmit = () => {
-    if (!currentLesson.title || !currentLesson.description || !currentLesson.duration) {
-      setError('Пожалуйста, заполните все обязательные поля урока');
-      return;
-    }
-
-    const newLessons = [...formData.lessons];
-    const lessonToAdd = {
-      ...currentLesson,
-      video: currentLesson.video ? (typeof currentLesson.video === 'string' ? currentLesson.video : '') : '',
-      resources: Array.isArray(currentLesson.resources) ? currentLesson.resources.filter(Boolean) : ['']
-    };
-
-    if (editingLessonIndex >= 0) {
-      newLessons[editingLessonIndex] = lessonToAdd;
-    } else {
-      newLessons.push(lessonToAdd);
-    }
-
-    setFormData({
-      ...formData,
-      lessons: newLessons
-    });
-
-    setLessonDialogOpen(false);
-  };
-
-  const removeLesson = (index) => {
-    const newLessons = formData.lessons.filter((_, i) => i !== index);
-    setFormData({
-      ...formData,
-      lessons: newLessons
-    });
   };
 
   const handleFileChange = (e) => {
@@ -254,31 +258,180 @@ const CourseEdit = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSaving(true);
     setError('');
+    setLoading(true);
+
+    // Валидация
+    if (!formData.title || !formData.description || !formData.category || !formData.level) {
+      setError('Пожалуйста, заполните все обязательные поля');
+      setLoading(false);
+      return;
+    }
+
+    if (formData.requirements.some(req => !req) || formData.learningObjectives.some(obj => !obj)) {
+      setError('Пожалуйста, заполните все требования и цели обучения');
+      setLoading(false);
+      return;
+    }
+
+    if (modules.length === 0) {
+      setError('Пожалуйста, добавьте хотя бы один модуль');
+      setLoading(false);
+      return;
+    }
+
     try {
       const formDataToSend = new FormData();
-      Object.keys(formData).forEach(key => {
+      const backendData = prepareDataForBackend();
+      Object.keys(backendData).forEach(key => {
         if (key === 'requirements' || key === 'learningObjectives') {
-          formDataToSend.append(key, JSON.stringify(formData[key]));
+          formDataToSend.append(key, JSON.stringify(backendData[key]));
         } else if (key === 'price') {
-          formDataToSend.append(key, Number(formData[key]));
-        } else if (key === 'thumbnail' && formData[key]) {
-          formDataToSend.append('thumbnail', formData[key]);
+          formDataToSend.append(key, Number(backendData[key]));
+        } else if (key === 'thumbnail' && backendData[key]) {
+          formDataToSend.append('thumbnail', backendData[key]);
         } else if (key === 'lessons') {
-          formDataToSend.append(key, JSON.stringify(formData[key]));
+          // Добавляем уроки без видео
+          const lessonsWithoutVideos = backendData[key].map(lesson => ({
+            ...lesson,
+            video: null
+          }));
+          formDataToSend.append(key, JSON.stringify(lessonsWithoutVideos));
+          // Добавляем видео уроков
+          backendData[key].forEach((lesson, index) => {
+            if (lesson.video) {
+              formDataToSend.append('lessonVideos', lesson.video);
+            }
+          });
+        } else if (key === 'quizzes') {
+          formDataToSend.append('quizzes', JSON.stringify(backendData[key]));
         } else if (key !== 'thumbnail') {
-          formDataToSend.append(key, formData[key]);
+          formDataToSend.append(key, backendData[key]);
         }
       });
-
       await coursesAPI.update(id, formDataToSend);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'Ошибка при сохранении изменений');
-    } finally {
-      setSaving(false);
+      setError(err.response?.data?.message || 'Ошибка при обновлении курса');
+      setLoading(false);
     }
+  };
+
+  const handleQuizChange = (field, value) => {
+    setCurrentQuiz(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleAddQuestion = () => {
+    setCurrentQuiz(prev => ({
+      ...prev,
+      questions: Array.isArray(prev.questions)
+        ? [...prev.questions, { question: '', options: ['', '', '', ''], correctOption: 0 }]
+        : [{ question: '', options: ['', '', '', ''], correctOption: 0 }]
+    }));
+  };
+
+  const handleQuestionChange = (qIdx, field, value) => {
+    setCurrentQuiz(prev => {
+      const questions = Array.isArray(prev.questions) ? [...prev.questions] : [];
+      if (!questions[qIdx]) questions[qIdx] = { question: '', options: ['', '', '', ''], correctOption: 0 };
+      questions[qIdx] = { ...questions[qIdx], [field]: value };
+      return { ...prev, questions };
+    });
+  };
+
+  const handleOptionChange = (qIdx, optIdx, value) => {
+    setCurrentQuiz(prev => {
+      const questions = Array.isArray(prev.questions) ? [...prev.questions] : [];
+      if (!questions[qIdx]) questions[qIdx] = { question: '', options: ['', '', '', ''], correctOption: 0 };
+      const options = Array.isArray(questions[qIdx].options) ? [...questions[qIdx].options] : ['', '', '', ''];
+      const currentOption = options[optIdx];
+      options[optIdx] = typeof currentOption === 'object' ? { ...currentOption, text: value } : value;
+      questions[qIdx] = { ...questions[qIdx], options };
+      return { ...prev, questions };
+    });
+  };
+
+  const handleCorrectOptionChange = (qIdx, value) => {
+    setCurrentQuiz(prev => {
+      const questions = Array.isArray(prev.questions) ? [...prev.questions] : [];
+      if (!questions[qIdx]) questions[qIdx] = { question: '', options: ['', '', '', ''], correctOption: 0 };
+      questions[qIdx] = { ...questions[qIdx], correctOption: value };
+      return { ...prev, questions };
+    });
+  };
+
+  // Добавить модуль
+  const handleAddModule = () => {
+    setModules([...modules, emptyModule(modules.length)]);
+  };
+
+  // Открыть форму лекции для модуля
+  const handleOpenLesson = (idx) => {
+    setEditingModuleIndex(idx);
+    setCurrentLesson(modules[idx].lesson && typeof modules[idx].lesson === 'object'
+      ? { ...modules[idx].lesson, resources: Array.isArray(modules[idx].lesson.resources) ? modules[idx].lesson.resources : [] }
+      : {
+          title: '',
+          description: '',
+          duration: '',
+          video: null,
+          resources: [''],
+          order: idx + 1
+        });
+    setLessonDialogOpen(true);
+  };
+
+  // Открыть форму теста для модуля
+  const handleOpenQuiz = (idx) => {
+    setEditingModuleIndex(idx);
+    setCurrentQuiz(modules[idx].quiz && typeof modules[idx].quiz === 'object'
+      ? modules[idx].quiz
+      : {
+          title: '',
+          description: '',
+          questions: []
+        });
+    setQuizDialogOpen(true);
+  };
+
+  // Сохранить лекцию в модуле
+  const handleSaveLesson = () => {
+    const newModules = [...modules];
+    newModules[editingModuleIndex].lesson = currentLesson;
+    setModules(newModules);
+    setLessonDialogOpen(false);
+  };
+
+  // Сохранить тест в модуле
+  const handleSaveQuiz = () => {
+    const newModules = [...modules];
+    newModules[editingModuleIndex].quiz = currentQuiz;
+    setModules(newModules);
+    setQuizDialogOpen(false);
+  };
+
+  // Удалить модуль
+  const handleRemoveModule = (idx) => {
+    setModules(modules.filter((_, i) => i !== idx));
+  };
+
+  // Преобразование для бэкенда
+  const prepareDataForBackend = () => {
+    const lessons = modules.map((m, i) => m.lesson ? { ...m.lesson, order: i + 1 } : null).filter(Boolean);
+    const quizzes = modules.map((m, i) => m.quiz ? {
+      ...m.quiz,
+      order: i + 1,
+      passingScore: m.quiz.passingScore || 1,
+      questions: (m.quiz.questions || []).map(q => ({
+        ...q,
+        type: q.type || 'single',
+        options: (q.options || []).map((opt, idx) => ({
+          text: typeof opt === 'object' ? opt.text : opt,
+          isCorrect: idx === q.correctOption
+        }))
+      }))
+    } : null).filter(Boolean);
+    return { ...formData, lessons, quizzes };
   };
 
   if (loading) {
@@ -487,48 +640,47 @@ const CourseEdit = () => {
             </Button>
           </Box>
           <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
-            Уроки курса
+            Управление модулями
           </Typography>
-          <List>
-            {formData?.lessons?.map((lesson, index) => (
-              <ListItem key={index}>
-                <ListItemText
-                  primary={`${index + 1}. ${lesson.title}`}
-                  secondary={`${lesson.duration} минут`}
-                />
-                <ListItemSecondaryAction>
-                  <IconButton
-                    edge="end"
-                    onClick={() => openLessonDialog(index)}
-                    sx={{ mr: 1 }}
-                  >
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton
-                    edge="end"
-                    onClick={() => removeLesson(index)}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
-          </List>
-          <Button
-            startIcon={<AddIcon />}
-            onClick={() => openLessonDialog()}
-            sx={{ mb: 3 }}
-          >
-            Добавить урок
+          <Button variant="contained" onClick={handleAddModule} sx={{ mb: 2 }}>
+            Добавить модуль
           </Button>
+          {modules.length === 0 && (
+            <Alert severity="info">Добавьте хотя бы один модуль</Alert>
+          )}
+          {modules.map((mod, idx) => (
+            <Paper key={idx} sx={{ mb: 2, p: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography variant="subtitle1">{mod.title}</Typography>
+                <Button color="error" onClick={() => handleRemoveModule(idx)}>Удалить модуль</Button>
+              </Box>
+              <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+                <Button variant="outlined" onClick={() => handleOpenLesson(idx)}>
+                  {mod.lesson ? 'Редактировать лекцию' : 'Добавить лекцию'}
+                </Button>
+                <Button variant="outlined" onClick={() => handleOpenQuiz(idx)}>
+                  {mod.quiz ? 'Редактировать тест' : 'Добавить тест'}
+                </Button>
+              </Box>
+              {mod.lesson && (
+                <Box sx={{ mt: 2, ml: 2 }}>
+                  <Typography variant="body2">Лекция: {mod.lesson?.title || ''}</Typography>
+                </Box>
+              )}
+              {mod.quiz && (
+                <Box sx={{ mt: 1, ml: 2 }}>
+                  <Typography variant="body2">Тест: {mod.quiz?.title || ''}</Typography>
+                </Box>
+              )}
+            </Paper>
+          ))}
           <Box sx={{ mt: 4, display: 'flex', gap: 2 }}>
             <Button
               type="submit"
               variant="contained"
               size="large"
-              disabled={saving}
             >
-              {saving ? <CircularProgress size={24} /> : 'Сохранить изменения'}
+              Сохранить изменения
             </Button>
             <Button
               variant="outlined"
@@ -541,16 +693,9 @@ const CourseEdit = () => {
         </form>
       </Paper>
 
-      {/* Диалог создания/редактирования урока */}
-      <Dialog
-        open={lessonDialogOpen}
-        onClose={() => setLessonDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          {editingLessonIndex >= 0 ? 'Редактирование урока' : 'Создание нового урока'}
-        </DialogTitle>
+      {/* Диалоги для лекции и теста */}
+      <Dialog open={lessonDialogOpen} onClose={() => setLessonDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Лекция</DialogTitle>
         <DialogContent>
           <TextField
             fullWidth
@@ -585,7 +730,7 @@ const CourseEdit = () => {
             required
           />
 
-          <Box sx={{ mt: 2 }}>
+          <Box sx={{ mt: 2, mb: 3 }}>
             <input
               accept="video/*"
               type="file"
@@ -599,34 +744,34 @@ const CourseEdit = () => {
                 component="span"
                 startIcon={<AddIcon />}
               >
-                Загрузить видео
+                Загрузить видео урока
               </Button>
             </label>
             {currentLesson.video && (
               <Typography variant="body2" sx={{ mt: 1 }}>
-                Выбрано: {currentLesson.video}
+                Выбрано: {currentLesson.video.name}
               </Typography>
             )}
           </Box>
 
-          <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
-            Ресурсы урока
+          <Typography variant="subtitle1" gutterBottom>
+            Дополнительные ресурсы
           </Typography>
           <List>
-            {currentLesson.resources.map((resource, index) => (
+            {(currentLesson.resources || []).map((resource, index) => (
               <ListItem key={index}>
                 <TextField
                   fullWidth
                   value={resource}
                   onChange={(e) => handleLessonResourceChange(index, e.target.value)}
-                  placeholder="Введите ссылку на ресурс"
+                  placeholder="Ссылка на ресурс (например, GitHub, документация)"
                   required
                 />
                 <ListItemSecondaryAction>
                   <IconButton
                     edge="end"
                     onClick={() => removeLessonResource(index)}
-                    disabled={currentLesson.resources.length === 1}
+                    disabled={(currentLesson.resources || []).length === 1}
                   >
                     <DeleteIcon />
                   </IconButton>
@@ -644,9 +789,58 @@ const CourseEdit = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setLessonDialogOpen(false)}>Отмена</Button>
-          <Button onClick={handleLessonSubmit} variant="contained">
-            {editingLessonIndex >= 0 ? 'Сохранить изменения' : 'Добавить урок'}
-          </Button>
+          <Button onClick={handleSaveLesson} variant="contained">Сохранить</Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={quizDialogOpen} onClose={() => setQuizDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Тест</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Название теста"
+            value={currentQuiz?.title || ''}
+            onChange={e => handleQuizChange('title', e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+          />
+          {(currentQuiz?.questions || []).map((q, qIdx) => (
+            <Box key={qIdx} sx={{ mb: 2, pl: 2, borderLeft: '2px solid #eee' }}>
+              <TextField
+                label={`Вопрос ${qIdx + 1}`}
+                value={q?.question || ''}
+                onChange={e => handleQuestionChange(qIdx, 'question', e.target.value)}
+                fullWidth
+                sx={{ mb: 1 }}
+              />
+              {(q?.options || []).map((opt, optIdx) => (
+                <TextField
+                  key={optIdx}
+                  label={`Вариант ${optIdx + 1}`}
+                  value={typeof opt === 'object' ? opt.text : opt || ''}
+                  onChange={e => handleOptionChange(qIdx, optIdx, e.target.value)}
+                  sx={{ mr: 1, mb: 1, width: '45%' }}
+                />
+              ))}
+              <TextField
+                select
+                label="Правильный вариант"
+                value={q?.correctOption ?? 0}
+                onChange={e => handleCorrectOptionChange(qIdx, Number(e.target.value))}
+                SelectProps={{ native: true }}
+                sx={{ width: 200 }}
+              >
+                {(q?.options || []).map((opt, idx) => (
+                  <option key={idx} value={idx}>
+                    {typeof opt === 'object' ? opt.text : opt || `Вариант ${idx + 1}`}
+                  </option>
+                ))}
+              </TextField>
+            </Box>
+          ))}
+          <Button variant="outlined" onClick={handleAddQuestion} sx={{ mt: 1 }}>Добавить вопрос</Button>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setQuizDialogOpen(false)}>Отмена</Button>
+          <Button onClick={handleSaveQuiz} variant="contained">Сохранить</Button>
         </DialogActions>
       </Dialog>
     </Container>

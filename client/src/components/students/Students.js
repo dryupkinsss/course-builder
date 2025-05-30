@@ -89,6 +89,9 @@ const Students = () => {
     return false;
   });
 
+  // Проверяем, есть ли вообще студенты на всех курсах
+  const totalStudents = courses.reduce((acc, course) => acc + (Array.isArray(course.enrolledStudents) ? course.enrolledStudents.length : 0), 0);
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
@@ -124,6 +127,13 @@ const Students = () => {
           ),
         }}
       />
+
+      {/* Если нет ни одного студента вообще */}
+      {totalStudents === 0 && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          На ваших курсах не обучается ни одного студента
+        </Alert>
+      )}
 
       {filteredCourses.map((course) => (
         <Paper key={course._id} sx={{ mb: 3, p: 2 }}>

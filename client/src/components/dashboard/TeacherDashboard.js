@@ -16,7 +16,8 @@ import {
   CircularProgress,
   Alert,
   Card,
-  CardContent
+  CardContent,
+  Avatar
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -28,6 +29,10 @@ import {
   Notifications as NotificationsIcon
 } from '@mui/icons-material';
 import { coursesAPI } from '../../services/api';
+import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined';
+import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
+import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
+import StarIcon from '@mui/icons-material/Star';
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
@@ -103,8 +108,8 @@ const TeacherDashboard = () => {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom>
-        Панель управления
+      <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
+        Панель преподавателя
       </Typography>
 
       {error && (
@@ -116,51 +121,63 @@ const TeacherDashboard = () => {
       {/* Статистика */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
+          <Card sx={{ display: 'flex', alignItems: 'center', p: 2, borderRadius: 4, boxShadow: 3, bgcolor: '#f5f7fa' }}>
+            <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
+              <PeopleIcon />
+            </Avatar>
+            <Box>
+              <Typography color="textSecondary" gutterBottom sx={{ fontWeight: 500 }}>
                 Всего студентов
               </Typography>
-              <Typography variant="h4">
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
                 {stats.totalStudents}
               </Typography>
-            </CardContent>
+            </Box>
           </Card>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
+          <Card sx={{ display: 'flex', alignItems: 'center', p: 2, borderRadius: 4, boxShadow: 3, bgcolor: '#f5f7fa' }}>
+            <Avatar sx={{ bgcolor: 'secondary.main', mr: 2 }}>
+              <SchoolOutlinedIcon />
+            </Avatar>
+            <Box>
+              <Typography color="textSecondary" gutterBottom sx={{ fontWeight: 500 }}>
                 Всего курсов
               </Typography>
-              <Typography variant="h4">
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
                 {stats.totalCourses}
               </Typography>
-            </CardContent>
+            </Box>
           </Card>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
+          <Card sx={{ display: 'flex', alignItems: 'center', p: 2, borderRadius: 4, boxShadow: 3, bgcolor: '#f5f7fa' }}>
+            <Avatar sx={{ bgcolor: 'success.main', mr: 2 }}>
+              <MonetizationOnIcon />
+            </Avatar>
+            <Box>
+              <Typography color="textSecondary" gutterBottom sx={{ fontWeight: 500 }}>
                 Общий доход
               </Typography>
-              <Typography variant="h4">
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
                 {stats.totalRevenue} ₽
               </Typography>
-            </CardContent>
+            </Box>
           </Card>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
+          <Card sx={{ display: 'flex', alignItems: 'center', p: 2, borderRadius: 4, boxShadow: 3, bgcolor: '#f5f7fa' }}>
+            <Avatar sx={{ bgcolor: 'warning.main', mr: 2 }}>
+              <StarIcon />
+            </Avatar>
+            <Box>
+              <Typography color="textSecondary" gutterBottom sx={{ fontWeight: 500 }}>
                 Средний рейтинг
               </Typography>
-              <Typography variant="h4">
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
                 {stats.averageRating}
               </Typography>
-            </CardContent>
+            </Box>
           </Card>
         </Grid>
       </Grid>
@@ -173,6 +190,7 @@ const TeacherDashboard = () => {
             variant="contained"
             startIcon={<AddIcon />}
             onClick={() => navigate('/courses/create')}
+            sx={{ borderRadius: 3, fontWeight: 600, py: 1.5, boxShadow: 2, transition: 'box-shadow 0.3s', ':hover': { boxShadow: 4 } }}
           >
             Создать курс
           </Button>
@@ -183,6 +201,7 @@ const TeacherDashboard = () => {
             variant="outlined"
             startIcon={<PeopleIcon />}
             onClick={() => navigate('/students')}
+            sx={{ borderRadius: 3, fontWeight: 600, py: 1.5 }}
           >
             Управление студентами
           </Button>
@@ -193,6 +212,7 @@ const TeacherDashboard = () => {
             variant="outlined"
             startIcon={<MessageIcon />}
             onClick={() => navigate('/messages')}
+            sx={{ borderRadius: 3, fontWeight: 600, py: 1.5 }}
           >
             Сообщения
           </Button>
@@ -200,46 +220,61 @@ const TeacherDashboard = () => {
       </Grid>
 
       {/* Список курсов */}
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Мои курсы
-        </Typography>
-        <List>
-          {courses.map((course) => (
-            <React.Fragment key={course._id}>
-              <ListItem>
-                <ListItemText
-                  primary={course.title}
-                  secondary={`${course.enrolledStudents?.length || 0} студентов • ${course.lessons?.length || 0} уроков`}
-                />
-                <ListItemSecondaryAction>
-                  <IconButton
-                    edge="end"
-                    onClick={() => navigate(`/courses/${course._id}/edit`)}
-                  >
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton
-                    edge="end"
-                    onClick={() => handleDeleteCourse(course._id)}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
-              <Divider />
-            </React.Fragment>
-          ))}
-        </List>
-      </Paper>
+      <Typography variant="h5" gutterBottom sx={{ fontWeight: 700, mt: 4, mb: 2 }}>
+        Мои курсы
+      </Typography>
+      <Grid container spacing={3}>
+        {courses.map((course) => (
+          <Grid item xs={12} sm={6} md={4} key={course._id}>
+            <Card sx={{ borderRadius: 4, boxShadow: 2, p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
+                  <MenuBookOutlinedIcon />
+                </Avatar>
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    {course.title}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {course.enrolledStudents?.length || 0} студентов • {course.lessons?.length || 0} уроков
+                  </Typography>
+                </Box>
+              </Box>
+              <Box sx={{ flexGrow: 1 }} />
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<EditIcon />}
+                  onClick={() => navigate(`/courses/${course._id}/edit`)}
+                  sx={{ borderRadius: 2, fontWeight: 500 }}
+                >
+                  Редактировать
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  size="small"
+                  startIcon={<DeleteIcon />}
+                  onClick={() => handleDeleteCourse(course._id)}
+                  sx={{ borderRadius: 2, fontWeight: 500 }}
+                >
+                  Удалить
+                </Button>
+              </Box>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
 
       {/* Последние уведомления */}
-      <Paper sx={{ p: 3, mt: 3 }}>
-        <Typography variant="h6" gutterBottom>
+      <Paper sx={{ p: 3, mt: 5, borderRadius: 4, boxShadow: 1, bgcolor: '#f5f7fa' }}>
+        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
           Последние уведомления
         </Typography>
         <List>
           <ListItem>
+            <NotificationsIcon color="primary" sx={{ mr: 2 }} />
             <ListItemText
               primary="Новый студент записался на курс"
               secondary="2 часа назад"
@@ -247,9 +282,10 @@ const TeacherDashboard = () => {
           </ListItem>
           <Divider />
           <ListItem>
+            <NotificationsIcon color="primary" sx={{ mr: 2 }} />
             <ListItemText
-              primary="Получен новый отзыв"
-              secondary="5 часов назад"
+              primary="Курс опубликован"
+              secondary="1 день назад"
             />
           </ListItem>
         </List>

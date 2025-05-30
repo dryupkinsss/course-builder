@@ -16,16 +16,16 @@ const progressSchema = new mongoose.Schema({
     ref: 'Lesson',
     required: true
   },
-  status: {
-    type: String,
-    enum: ['not_started', 'in_progress', 'completed'],
-    default: 'not_started'
-  },
   progress: {
     type: Number,
     min: 0,
     max: 100,
     default: 0
+  },
+  status: {
+    type: String,
+    enum: ['not_started', 'in_progress', 'completed'],
+    default: 'not_started'
   },
   lastAccessed: {
     type: Date,
@@ -38,8 +38,23 @@ const progressSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Индекс для быстрого поиска прогресса студента по курсу и уроку
+// Индекс для быстрого поиска прогресса
 progressSchema.index({ student: 1, course: 1, lesson: 1 }, { unique: true });
+
+// Метод для обновления прогресса
+progressSchema.methods.updateProgress = async function(newProgress) {
+  this.progress = newProgress;
+  this.lastAccessed = new Date();
+  
+  if (newProgress === 100) {
+    this.status = 'completed';
+    this.completedAt = new Date();
+  } else if (newProgress > 0) {
+    this.status = 'in_progress';
+  }
+  
+  return this.save();
+};
 
 const Progress = mongoose.model('Progress', progressSchema);
 
