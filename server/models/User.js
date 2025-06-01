@@ -48,7 +48,13 @@ const userSchema = new mongoose.Schema({
             },
             score: Number,
             completedAt: Date
-        }]
+        }],
+        totalProgress: {
+            type: Number,
+            min: 0,
+            max: 100,
+            default: 0
+        }
     }]
 }, {
     timestamps: true

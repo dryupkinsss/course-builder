@@ -21,6 +21,7 @@ import Dashboard from './components/dashboard/Dashboard';
 import CourseEdit from './components/courses/CourseEdit';
 import Students from './components/students/Students';
 import Messages from './components/messages/Messages';
+import QuizComponent from './components/quiz/QuizComponent';
 
 // Создание темы
 const theme = createTheme({
@@ -71,6 +72,7 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/students" element={<Students />} />
               <Route path="/messages" element={<Messages />} />
+              <Route path="/quiz/:id" element={<QuizComponent />} />
             </Routes>
           </div>
         </Router>

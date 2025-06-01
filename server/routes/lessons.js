@@ -4,6 +4,8 @@ const Lesson = require('../models/Lesson');
 const Course = require('../models/Course');
 const { auth } = require('../middlewares/auth');
 const { upload, handleUploadError } = require('../middlewares/upload');
+const Progress = require('../models/Progress');
+const User = require('../models/User');
 
 // Получение всех уроков курса
 router.get('/course/:courseId', auth, async (req, res) => {
@@ -228,7 +230,8 @@ router.delete('/:id', auth, async (req, res) => {
 // Отметка урока как завершенного
 router.post('/:id/complete', auth, async (req, res) => {
     try {
-        const lesson = await Lesson.findById(req.params.id);
+        const lesson = await Lesson.findById(req.params.id)
+            .populate('quiz');
         
         if (!lesson) {
             return res.status(404).json({ message: 'Урок не найден' });
@@ -240,12 +243,83 @@ router.post('/:id/complete', auth, async (req, res) => {
             return res.status(403).json({ message: 'Нет доступа' });
         }
 
+        // Обновляем или создаем запись о прогрессе
+        const progress = await Progress.findOneAndUpdate(
+            {
+                student: req.user._id,
+                course: lesson.course,
+                lesson: lesson._id
+            },
+            {
+                progress: 100,
+                status: 'completed',
+                lastAccessed: new Date(),
+                completedAt: new Date()
+            },
+            {
+                new: true,
+                upsert: true
+            }
+        );
+
         if (!lesson.completedBy.includes(req.user._id)) {
             lesson.completedBy.push(req.user._id);
             await lesson.save();
         }
 
-        res.json({ message: 'Урок отмечен как завершенный' });
+        // Обновляем прогресс в модели пользователя
+        const user = await User.findById(req.user._id);
+        const userProgress = user.progress.find(p => p.course.toString() === lesson.course.toString());
+        
+        if (userProgress) {
+            if (!userProgress.completedLessons.includes(lesson._id)) {
+                userProgress.completedLessons.push(lesson._id);
+            }
+        } else {
+            user.progress.push({
+                course: lesson.course,
+                completedLessons: [lesson._id],
+                quizScores: []
+            });
+        }
+
+        // Получаем все уроки курса для расчета общего прогресса
+        const allLessons = await Lesson.find({ course: lesson.course });
+        const totalLessons = allLessons.length;
+        
+        // Получаем прогресс по всем урокам
+        const lessonsProgress = await Progress.find({
+            student: req.user._id,
+            course: lesson.course,
+            lesson: { $in: allLessons.map(l => l._id) }
+        });
+
+        // Вычисляем общий прогресс курса
+        const totalProgress = lessonsProgress.reduce((acc, p) => acc + p.progress, 0) / totalLessons;
+
+        // Обновляем общий прогресс в модели пользователя
+        if (userProgress) {
+            userProgress.totalProgress = Math.round(totalProgress);
+        }
+
+        await user.save();
+
+        // Проверяем наличие теста
+        const hasQuiz = lesson.quiz && lesson.quiz._id;
+        const quizProgress = hasQuiz ? await Progress.findOne({
+            student: req.user._id,
+            course: lesson.course,
+            quiz: lesson.quiz._id
+        }) : null;
+
+        res.json({
+            message: 'Урок успешно завершен',
+            progress: progress,
+            totalProgress: Math.round(totalProgress),
+            hasQuiz: hasQuiz,
+            quizCompleted: quizProgress ? quizProgress.status === 'completed' : false,
+            quizId: hasQuiz ? lesson.quiz._id : null
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Ошибка сервера' });

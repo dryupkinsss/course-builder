@@ -63,7 +63,8 @@ const CourseCreate = () => {
     requirements: [''],
     learningObjectives: [''],
     lessons: [],
-    quizzes: []
+    quizzes: [],
+    isPublished: true
   });
 
   // Инициализация состояния для модулей
@@ -321,6 +322,8 @@ const CourseCreate = () => {
           });
         } else if (key === 'quizzes') {
           formDataToSend.append('quizzes', JSON.stringify(prepareDataForBackend()[key]));
+        } else if (key === 'isPublished') {
+          formDataToSend.append(key, prepareDataForBackend()[key]);
         } else if (key !== 'thumbnail') {
           formDataToSend.append(key, prepareDataForBackend()[key]);
         }

@@ -53,10 +53,25 @@ const CourseDetail = () => {
     comment: ''
   });
   const [reviewError, setReviewError] = useState('');
+  const [enrollmentSuccess, setEnrollmentSuccess] = useState(false);
+  const [courseProgress, setCourseProgress] = useState(null);
+
+  // Проверяем, записан ли пользователь на курс
+  const isEnrolled = () => {
+    return isAuthenticated && course && course.enrolledStudents.some(
+      student => student._id === user._id || student === user._id
+    );
+  };
 
   useEffect(() => {
     fetchCourse();
   }, [id]);
+
+  useEffect(() => {
+    if (isEnrolled() && user) {
+      fetchCourseProgress();
+    }
+  }, [isEnrolled, user, course]);
 
   const fetchCourse = async () => {
     try {
@@ -66,6 +81,47 @@ const CourseDetail = () => {
     } catch (err) {
       setError('Ошибка при загрузке курса');
       setLoading(false);
+    }
+  };
+
+  const fetchCourseProgress = async () => {
+    try {
+      const progress = await coursesAPI.getCourseProgress(id);
+      setCourseProgress(progress);
+    } catch (err) {
+      console.error('Ошибка при получении прогресса:', err);
+    }
+  };
+
+  const hasStartedCourse = () => {
+    if (!courseProgress) return false;
+    return courseProgress.lessons.some(lesson => lesson.progress > 0);
+  };
+
+  const getNextLessonId = () => {
+    if (!course?.lessons || !Array.isArray(course.lessons) || course.lessons.length === 0) {
+      console.error('No lessons available in course');
+      return null;
+    }
+    
+    // Если есть незавершенные уроки, возвращаем ID первого незавершенного
+    if (courseProgress?.lessons) {
+      const incompleteLesson = courseProgress.lessons.find(lesson => lesson.progress < 100);
+      if (incompleteLesson) {
+        return incompleteLesson._id;
+      }
+    }
+    
+    // Если все уроки завершены или нет прогресса, возвращаем ID первого урока
+    return course.lessons[0]._id;
+  };
+
+  const handleStartLearning = () => {
+    const nextLessonId = getNextLessonId();
+    if (nextLessonId) {
+      navigate(`/courses/${id}/lessons/${nextLessonId}`);
+    } else {
+      setError('В курсе нет доступных уроков');
     }
   };
 
@@ -101,7 +157,9 @@ const CourseDetail = () => {
 
     try {
       await coursesAPI.enroll(id);
-      navigate(`/courses/${id}/lessons/${course.lessons[0]._id}`);
+      setEnrollmentSuccess(true);
+      // Обновляем данные курса после записи
+      await fetchCourse();
     } catch (err) {
       if (err.response?.status === 400 && err.response?.data?.message === 'Вы уже записаны на этот курс') {
         setError('Вы уже записаны на этот курс. Перейдите к первому уроку.');
@@ -111,6 +169,15 @@ const CourseDetail = () => {
       } else {
         setError('Ошибка при записи на курс');
       }
+    }
+  };
+
+  const handleLeaveCourse = async () => {
+    try {
+      await coursesAPI.leaveCourse(id);
+      navigate('/dashboard');
+    } catch (err) {
+      setError('Ошибка при попытке покинуть курс');
     }
   };
 
@@ -149,6 +216,30 @@ const CourseDetail = () => {
 
   return (
     <Container sx={{ py: 4, maxWidth: '1100px' }}>
+      {enrollmentSuccess && (
+        <Alert 
+          severity="success" 
+          sx={{ mb: 3 }}
+          action={
+            <Button 
+              color="inherit" 
+              size="small"
+              onClick={() => navigate('/dashboard')}
+            >
+              Перейти в личный кабинет
+            </Button>
+          }
+        >
+          Вы успешно записались на курс! Теперь вы можете начать обучение в личном кабинете.
+        </Alert>
+      )}
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
+
       <Grid container spacing={4}>
         {/* Основная информация о курсе */}
         <Grid item xs={12} md={8}>
@@ -238,6 +329,17 @@ const CourseDetail = () => {
               {course.price === 0 ? 'Бесплатно' : `${course.price} ₽`}
             </Typography>
             {!isCourseCreator() && (
+              <>
+                {isEnrolled() ? (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={handleStartLearning}
+                    disabled={!isEnrolled()}
+                  >
+                    {hasStartedCourse() ? 'Продолжить обучение' : 'Начать обучение'}
+                  </Button>
+                ) : (
               <Button
                 variant="contained"
                 fullWidth
@@ -247,6 +349,8 @@ const CourseDetail = () => {
               >
                 {isAuthenticated ? 'Записаться на курс' : 'Войти для записи'}
               </Button>
+                )}
+              </>
             )}
             <List dense>
               <ListItem>

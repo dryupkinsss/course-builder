@@ -9,6 +9,7 @@ const Progress = require('../models/Progress');
 const Quiz = require('../models/Quiz');
 const mongoose = require('mongoose');
 const path = require('path');
+const User = require('../models/User');
 
 // Получение всех курсов
 router.get('/', auth, async (req, res) => {
@@ -64,101 +65,82 @@ router.get('/enrolled', auth, async (req, res) => {
 router.get('/:id', auth, async (req, res) => {
     try {
         console.log('Fetching course with ID:', req.params.id);
-        console.log('User ID:', req.user._id);
-
         const course = await Course.findById(req.params.id)
-            .populate({
-                path: 'lessons',
-                select: 'title duration order video description',
-                options: { sort: { order: 1 } }
-            })
             .populate('instructor', 'name email')
-            .populate('enrolledStudents', 'name email')
-            .populate('quizzes');
+            .populate('lessons')
+            .populate({
+                path: 'quizzes',
+                populate: {
+                    path: 'questions',
+                    populate: {
+                        path: 'options'
+                    }
+                }
+            });
 
         if (!course) {
-            console.log('Course not found');
             return res.status(404).json({ message: 'Курс не найден' });
         }
 
-        console.log('Course found:', {
-            courseId: course._id,
-            instructorId: course.instructor._id,
-            isPublished: course.isPublished,
-            lessonsCount: course.lessons ? course.lessons.length : 0
-        });
-
-        // Проверка доступа
-        const userIdStr = req.user._id.toString();
-        const enrolledIds = course.enrolledStudents.map(s => s._id ? s._id.toString() : s.toString());
-        const isEnrolled = enrolledIds.includes(userIdStr);
-        const isInstructor = course.instructor._id ? course.instructor._id.toString() === userIdStr : course.instructor.toString() === userIdStr;
+        // Проверяем доступ
+        const userId = req.user._id;
+        const isInstructor = course.instructor._id.toString() === userId.toString();
+        const isEnrolled = course.enrolledStudents.includes(userId);
         const isPublished = course.isPublished;
 
-        console.log('Access check:', { userIdStr, enrolledIds, isEnrolled, isInstructor, isPublished });
+        console.log('Access check:', {
+            userIdStr: userId.toString(),
+            enrolledIds: course.enrolledStudents.map(id => id.toString()),
+            isEnrolled,
+            isInstructor,
+            isPublished
+        });
 
-        // Разрешаем просмотр любому, если курс опубликован
-        if (!isPublished && !isEnrolled && !isInstructor) {
-            console.log('Access denied');
-            return res.status(403).json({ message: 'Нет доступа' });
+        // Если курс не опубликован и пользователь не инструктор и не записан на курс
+        if (!isPublished && !isInstructor && !isEnrolled) {
+            return res.status(403).json({ message: 'Нет доступа к курсу' });
         }
 
         // Преобразуем данные для отправки
-        const courseData = course.toObject();
-        
-        // Преобразуем ObjectId в строки
-        courseData._id = courseData._id.toString();
-        courseData.instructor = courseData.instructor._id.toString();
-        courseData.enrolledStudents = courseData.enrolledStudents.map(student => student._id.toString());
-        
-        // Убедимся, что lessons - это массив
-        if (!Array.isArray(courseData.lessons)) {
-            courseData.lessons = [];
-        }
-
-        // Преобразуем уроки
-        courseData.lessons = courseData.lessons.map(lesson => ({
-            _id: lesson._id.toString(),
-            title: lesson.title || '',
-            duration: lesson.duration || 0,
-            order: lesson.order || 0,
-            video: lesson.video || '',
-            description: lesson.description || ''
-        }));
-
-        // Убедимся, что quizzes - это массив
-        if (!Array.isArray(courseData.quizzes)) {
-            courseData.quizzes = [];
-        }
-
-        // Преобразуем тесты
-        courseData.quizzes = courseData.quizzes.map(quiz => ({
+        const courseData = {
+            ...course.toObject(),
+            _id: course._id.toString(),
+            instructor: {
+                _id: course.instructor._id.toString(),
+                name: course.instructor.name,
+                email: course.instructor.email
+            },
+            lessons: course.lessons.map(lesson => ({
+                ...lesson.toObject(),
+                _id: lesson._id.toString()
+            })),
+            quizzes: course.quizzes.map(quiz => ({
+                ...quiz.toObject(),
             _id: quiz._id.toString(),
-            title: quiz.title || '',
-            description: quiz.description || '',
-            order: quiz.order || 0,
-            passingScore: quiz.passingScore || 1,
-            questions: (quiz.questions || []).map(q => ({
-                question: q.question,
-                type: q.type,
-                options: q.options,
-                correctOption: Array.isArray(q.options) ? q.options.findIndex(opt => opt.isCorrect) : 0
-            }))
-        }));
+                questions: quiz.questions.map(q => ({
+                    ...q.toObject(),
+                    _id: q._id.toString(),
+                    options: q.options.map(opt => ({
+                        ...opt.toObject(),
+                        _id: opt._id.toString()
+                    }))
+                }))
+            })),
+            enrolledStudents: course.enrolledStudents.map(id => id.toString())
+        };
 
-        console.log('Sending course data:', {
+        console.log('Sending full course data with quizzes:', {
             id: courseData._id,
             title: courseData.title,
-            lessonsCount: courseData.lessons.length
+            lessonsCount: courseData.lessons.length,
+            quizzesCount: courseData.quizzes.length,
+            quizzes: courseData.quizzes
         });
 
         res.json(courseData);
     } catch (error) {
-        console.error('Ошибка при получении курса:', error);
-        if (error.name === 'CastError') {
-            return res.status(400).json({ message: 'Неверный формат ID курса' });
-        }
-        res.status(500).json({ message: 'Ошибка сервера' });
+        console.error('Error fetching course:', error);
+        res.status(500).json({ message: 'Ошибка при получении курса' });
     }
 });
 
@@ -303,6 +285,11 @@ router.put('/:id', auth, upload.fields([
   { name: 'lessonVideos', maxCount: 10 }
 ]), async (req, res) => {
   try {
+    console.log('Updating course with ID:', req.params.id);
+    console.log('Request body:', req.body);
+    console.log('Request files:', req.files);
+
+    // Получаем курс и его тесты
     const course = await Course.findById(req.params.id);
     if (!course) {
       return res.status(404).json({ message: 'Курс не найден' });
@@ -311,6 +298,10 @@ router.put('/:id', auth, upload.fields([
     if (course.instructor.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Нет доступа' });
     }
+
+    // Получаем существующие тесты курса
+    const existingQuizzes = await Quiz.find({ _id: { $in: course.quizzes } });
+    console.log('Existing quizzes:', existingQuizzes);
 
     const { title, description, category, level, price, requirements, learningObjectives, lessons, quizzes } = req.body;
 
@@ -338,12 +329,30 @@ router.put('/:id', auth, upload.fields([
     } catch (e) {
       parsedLessons = [];
     }
+
+    const createdLessons = [];
     for (let i = 0; i < parsedLessons.length; i++) {
       const lessonData = parsedLessons[i];
       let videoPath = null;
+      
+      // Обработка видео файла
       if (req.files && req.files.lessonVideos && req.files.lessonVideos[i]) {
         videoPath = req.files.lessonVideos[i].path;
+        const uploadsIndex = videoPath.lastIndexOf('uploads');
+        if (uploadsIndex !== -1) {
+          videoPath = videoPath.substring(uploadsIndex + 'uploads/'.length);
+        } else {
+          videoPath = path.basename(videoPath);
+        }
+        // Удаляем все ведущие videos/ (и слэши)
+        videoPath = videoPath.replace(/^videos[\/]+/, '');
+        // Добавляем только один раз videos/
+        videoPath = 'videos/' + path.basename(videoPath);
+      } else if (lessonData.video) {
+        // Если видео не загружено заново, используем существующий путь
+        videoPath = lessonData.video;
       }
+
       const lesson = new Lesson({
         ...lessonData,
         course: course._id,
@@ -351,74 +360,109 @@ router.put('/:id', auth, upload.fields([
         order: i + 1
       });
       await lesson.save();
+      createdLessons.push(lesson._id);
     }
+
+    // Обновляем ссылки на уроки в курсе
+    course.lessons = createdLessons;
 
     // Обновляем тесты
     let parsedQuizzes = [];
     try {
+      console.log('Raw quizzes from request:', req.body.quizzes);
       parsedQuizzes = JSON.parse(req.body.quizzes || '[]');
+      console.log('Parsed quizzes from request:', parsedQuizzes);
     } catch (e) {
+      console.error('Error parsing quizzes:', e);
       parsedQuizzes = [];
     }
-    console.log('parsedQuizzes:', parsedQuizzes);
 
+    // Обновляем или создаем тесты
     const updatedQuizzes = [];
     for (let i = 0; i < parsedQuizzes.length; i++) {
       const quizData = parsedQuizzes[i];
-      const { _id, ...quizDataWithoutId } = quizData;
-
-      // Привести структуру вопросов и опций к нужному виду
-      const questions = Array.isArray(quizDataWithoutId.questions)
-        ? quizDataWithoutId.questions.map(q => ({
-            question: q.question,
-            type: q.type || 'single',
-            options: Array.isArray(q.options)
-              ? q.options.map(opt =>
-                  typeof opt === 'object' && opt.text ? { text: opt.text, isCorrect: !!opt.isCorrect } : { text: String(opt), isCorrect: false }
-                )
-              : [],
-            correctOption: typeof q.correctOption === 'number' ? q.correctOption : 0
-          }))
-        : [];
+      console.log('Processing quiz data:', JSON.stringify(quizData, null, 2));
 
       let quiz;
-      if (_id) {
-        // Обновляем существующий тест
-        quiz = await Quiz.findById(_id);
-        if (quiz) {
-          quiz.title = quizDataWithoutId.title;
-          quiz.description = quizDataWithoutId.description;
-          quiz.questions = questions;
-          quiz.passingScore = quizDataWithoutId.passingScore || 1;
-          quiz.order = i + 1;
-          await quiz.save();
-        }
+      // Если у нас есть существующий тест с таким же порядковым номером, обновляем его
+      const existingQuiz = existingQuizzes.find(q => q.order === quizData.order);
+      if (existingQuiz) {
+        quiz = existingQuiz;
+        quiz.title = quizData.title;
+        quiz.description = quizData.description || '';
+        quiz.questions = quizData.questions.map(q => ({
+          question: q.question,
+          type: q.type || 'single',
+          options: q.options.map((opt, idx) => ({
+            text: typeof opt === 'object' ? opt.text : opt,
+            isCorrect: idx === q.correctOption
+          })),
+          correctOption: q.correctOption,
+          points: 1
+        }));
+        quiz.passingScore = quizData.passingScore || 1;
+        quiz.order = quizData.order || i + 1;
       } else {
-        // Создаем новый тест, если _id не предоставлен
+        // Если нет существующего теста с таким порядковым номером, создаем новый
         quiz = new Quiz({
-          ...quizDataWithoutId,
-          passingScore: quizDataWithoutId.passingScore || 1,
-          questions,
+          title: quizData.title,
+          description: quizData.description || '',
+          questions: quizData.questions.map(q => ({
+            question: q.question,
+            type: q.type || 'single',
+            options: q.options.map((opt, idx) => ({
+              text: typeof opt === 'object' ? opt.text : opt,
+              isCorrect: idx === q.correctOption
+            })),
+            correctOption: q.correctOption,
+            points: 1
+          })),
+          passingScore: quizData.passingScore || 1,
           course: course._id,
-          order: i + 1
+          order: quizData.order || i + 1
         });
-        await quiz.save();
       }
       
-      if (quiz) {
+      console.log('Saving quiz:', JSON.stringify(quiz, null, 2));
+      await quiz.save();
+      console.log('Saved quiz:', quiz._id);
         updatedQuizzes.push(quiz._id);
-      }
     }
 
     // Удаляем тесты, которых нет в обновленном списке
-    await Quiz.deleteMany({
-      course: course._id,
-      _id: { $nin: updatedQuizzes }
-    });
+    const updatedQuizIds = updatedQuizzes.map(id => id.toString());
+    const quizzesToDelete = existingQuizzes.filter(q => !updatedQuizIds.includes(q._id.toString()));
+    if (quizzesToDelete.length > 0) {
+      await Quiz.deleteMany({ _id: { $in: quizzesToDelete.map(q => q._id) } });
+    }
 
+    // Обновляем ссылки на тесты в курсе
+    console.log('Updating course quizzes with IDs:', updatedQuizzes);
     course.quizzes = updatedQuizzes;
+    console.log('Updated course quizzes:', updatedQuizzes);
+
+    // Сохраняем обновленный курс
+    console.log('Saving updated course...');
     await course.save();
-    res.json(course);
+    console.log('Course saved successfully');
+
+    // Возвращаем обновленный курс с заполненными данными
+    console.log('Fetching updated course with populated data...');
+    const updatedCourse = await Course.findById(course._id)
+      .populate('lessons')
+      .populate({
+        path: 'quizzes',
+        populate: {
+          path: 'questions',
+          populate: {
+            path: 'options'
+          }
+        }
+      })
+      .populate('instructor', 'name email');
+
+    console.log('Updated course:', JSON.stringify(updatedCourse, null, 2));
+    res.json(updatedCourse);
   } catch (error) {
     console.error('Error updating course:', error);
     res.status(500).json({ message: 'Ошибка при обновлении курса' });
@@ -786,6 +830,132 @@ router.get('/:courseId/progress/:studentId', auth, async (req, res) => {
   } catch (error) {
     console.error('Ошибка при получении прогресса:', error);
     res.status(500).json({ message: 'Ошибка при получении прогресса' });
+  }
+});
+
+// Покинуть курс
+router.post('/:id/leave', auth, async (req, res) => {
+    try {
+        const course = await Course.findById(req.params.id);
+        
+        if (!course) {
+            return res.status(404).json({ message: 'Курс не найден' });
+        }
+
+        // Проверка, записан ли пользователь на курс
+        const isEnrolled = course.enrolledStudents.some(id => id.toString() === req.user._id.toString());
+        if (!isEnrolled) {
+            return res.status(400).json({ message: 'Вы не записаны на этот курс' });
+        }
+
+        // Удаляем пользователя из списка записанных студентов
+        course.enrolledStudents = course.enrolledStudents.filter(
+            id => id.toString() !== req.user._id.toString()
+        );
+
+        // Удаляем прогресс пользователя по курсу
+        await Progress.deleteMany({
+            student: req.user._id,
+            course: course._id
+        });
+
+        await course.save();
+
+        res.json({ message: 'Вы успешно покинули курс' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Ошибка сервера' });
+  }
+});
+
+// Обновление прогресса курса
+router.put('/:courseId/progress', auth, async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { progress, lessons } = req.body;
+    const studentId = req.user._id;
+
+    // Проверяем, что курс существует
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: 'Курс не найден' });
+    }
+
+    // Проверяем, что студент зачислен на курс
+    const isEnrolled = course.enrolledStudents.includes(studentId);
+    if (!isEnrolled) {
+      return res.status(403).json({ message: 'Вы не зачислены на этот курс' });
+    }
+
+    // Обновляем прогресс для каждого урока
+    const completedLessons = [];
+    for (const lesson of lessons) {
+      const progressDoc = await Progress.findOneAndUpdate(
+        {
+          student: studentId,
+          course: courseId,
+          lesson: lesson.lessonId
+        },
+        {
+          progress: lesson.progress,
+          status: lesson.status,
+          lastAccessed: new Date(),
+          completedAt: lesson.status === 'completed' ? new Date() : undefined
+        },
+        {
+          new: true,
+          upsert: true,
+          setDefaultsOnInsert: true
+        }
+      );
+
+      if (lesson.status === 'completed') {
+        completedLessons.push(lesson.lessonId);
+      }
+    }
+
+    // Получаем все уроки курса для расчета общего прогресса
+    const allLessons = await Lesson.find({ course: courseId });
+    const totalLessons = allLessons.length;
+    
+    // Получаем прогресс по всем урокам
+    const lessonsProgress = await Progress.find({
+      student: studentId,
+      course: courseId,
+      lesson: { $in: allLessons.map(l => l._id) }
+    });
+
+    // Вычисляем общий прогресс курса
+    const totalProgress = lessonsProgress.reduce((acc, p) => acc + p.progress, 0) / totalLessons;
+
+    // Обновляем прогресс в модели пользователя
+    const user = await User.findById(studentId);
+    const userProgress = user.progress.find(p => p.course.toString() === courseId);
+    
+    if (userProgress) {
+      // Обновляем список завершенных уроков и общий прогресс
+      userProgress.completedLessons = completedLessons;
+      userProgress.totalProgress = Math.round(totalProgress);
+    } else {
+      user.progress.push({
+        course: courseId,
+        completedLessons: completedLessons,
+        quizScores: [],
+        totalProgress: Math.round(totalProgress)
+      });
+    }
+    
+    await user.save();
+
+    res.json({
+      message: 'Прогресс успешно обновлен',
+      progress,
+      lessons,
+      totalProgress: Math.round(totalProgress)
+    });
+  } catch (error) {
+    console.error('Ошибка при обновлении прогресса:', error);
+    res.status(500).json({ message: 'Ошибка при обновлении прогресса' });
   }
 });
 

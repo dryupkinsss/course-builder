@@ -45,6 +45,7 @@ const CourseEdit = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -63,6 +64,13 @@ const CourseEdit = () => {
     title: `Модуль ${index + 1}`,
     lesson: null,
     quiz: null
+  });
+
+  const emptyQuiz = () => ({
+    title: '',
+    description: '',
+    questions: [],
+    passingScore: 1
   });
 
   const [modules, setModules] = useState([]);
@@ -110,32 +118,57 @@ const CourseEdit = () => {
           quizzes: Array.isArray(course.quizzes) ? course.quizzes : []
         };
 
-        // Формируем modules из lessons и quizzes
+        // Формируем модули из уроков и тестов
         const lessons = Array.isArray(course.lessons) ? course.lessons : [];
         const quizzes = Array.isArray(course.quizzes) ? course.quizzes : [];
         
-        // Создаем модули на основе уроков
-        const loadedModules = lessons.map((lesson, index) => ({
-          title: `Модуль ${index + 1}`,
-          lesson,
-          quiz: null
-        }));
+        console.log('Loaded lessons:', lessons);
+        console.log('Loaded quizzes:', quizzes);
+        
+        // Создаем массив модулей максимальной длины
+        const maxLength = Math.max(lessons.length, quizzes.length);
+        const loadedModules = [];
 
-        // Добавляем тесты в соответствующие модули
-        quizzes.forEach(quiz => {
-          const moduleIndex = quiz.order > 0 ? quiz.order - 1 : 0;
-          if (loadedModules[moduleIndex]) {
-            loadedModules[moduleIndex].quiz = quiz;
-          } else {
-            // Если модуля нет, создаем новый
-            loadedModules.push({
-              title: `Модуль ${moduleIndex + 1}`,
-              lesson: null,
-              quiz
-            });
+        // Заполняем модули данными
+        for (let i = 0; i < maxLength; i++) {
+          const module = {
+            title: `Модуль ${i + 1}`,
+            lesson: lessons[i] || null,
+            quiz: null
+          };
+
+          // Находим тест для текущего модуля
+          const moduleQuiz = quizzes.find(q => {
+            // Если у теста нет order, используем индекс в массиве + 1
+            const quizOrder = q.order || (quizzes.indexOf(q) + 1);
+            return quizOrder === i + 1;
+          });
+
+          if (moduleQuiz) {
+            module.quiz = {
+              ...moduleQuiz,
+              order: moduleQuiz.order || (quizzes.indexOf(moduleQuiz) + 1),
+              questions: moduleQuiz.questions.map(q => ({
+                question: q.question,
+                type: q.type || 'single',
+                options: q.options.map((opt, idx) => ({
+                  text: typeof opt === 'object' ? opt.text : opt,
+                  isCorrect: idx === q.correctOption
+                })),
+                correctOption: q.correctOption
+              }))
+            };
           }
-        });
 
+          loadedModules.push(module);
+        }
+
+        // Если нет модулей, создаем один пустой
+        if (loadedModules.length === 0) {
+          loadedModules.push(emptyModule(0));
+        }
+
+        console.log('Loaded modules:', loadedModules);
         setModules(loadedModules);
         setFormData(newFormData);
       } catch (err) {
@@ -192,10 +225,9 @@ const CourseEdit = () => {
   const handleLessonFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Сохраняем только имя файла, так как это временный файл
       setCurrentLesson({
         ...currentLesson,
-        video: file.name
+        video: file
       });
     }
   };
@@ -224,28 +256,6 @@ const CourseEdit = () => {
     });
   };
 
-  const openLessonDialog = (index = -1) => {
-    if (index >= 0) {
-      const lesson = formData.lessons[index];
-      setCurrentLesson({
-        ...lesson,
-        resources: Array.isArray(lesson.resources) ? lesson.resources : ['']
-      });
-      setEditingModuleIndex(index);
-    } else {
-      setCurrentLesson({
-        title: '',
-        description: '',
-        duration: '',
-        video: null,
-        resources: [''],
-        order: formData.lessons.length + 1
-      });
-      setEditingModuleIndex(-1);
-    }
-    setLessonDialogOpen(true);
-  };
-
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -268,14 +278,9 @@ const CourseEdit = () => {
       return;
     }
 
-    if (formData.requirements.some(req => !req) || formData.learningObjectives.some(obj => !obj)) {
-      setError('Пожалуйста, заполните все требования и цели обучения');
-      setLoading(false);
-      return;
-    }
-
-    if (modules.length === 0) {
-      setError('Пожалуйста, добавьте хотя бы один модуль');
+    // Проверяем, что есть хотя бы один модуль с уроком или тестом
+    if (!modules.some(module => module.lesson || module.quiz)) {
+      setError('Добавьте хотя бы один урок или тест');
       setLoading(false);
       return;
     }
@@ -283,6 +288,8 @@ const CourseEdit = () => {
     try {
       const formDataToSend = new FormData();
       const backendData = prepareDataForBackend();
+
+      // Добавляем основные данные курса
       Object.keys(backendData).forEach(key => {
         if (key === 'requirements' || key === 'learningObjectives') {
           formDataToSend.append(key, JSON.stringify(backendData[key]));
@@ -291,28 +298,55 @@ const CourseEdit = () => {
         } else if (key === 'thumbnail' && backendData[key]) {
           formDataToSend.append('thumbnail', backendData[key]);
         } else if (key === 'lessons') {
-          // Добавляем уроки без видео
-          const lessonsWithoutVideos = backendData[key].map(lesson => ({
-            ...lesson,
-            video: null
-          }));
-          formDataToSend.append(key, JSON.stringify(lessonsWithoutVideos));
-          // Добавляем видео уроков
-          backendData[key].forEach((lesson, index) => {
-            if (lesson.video) {
+          // Сначала собираем все видео файлы
+          const lessonsWithVideoPaths = backendData[key].map((lesson, index) => {
+            if (lesson.video instanceof File) {
+              // Добавляем видео файл с правильным именем поля
               formDataToSend.append('lessonVideos', lesson.video);
+              return {
+                ...lesson,
+                video: null,
+                videoIndex: index // Сохраняем индекс для сопоставления на сервере
+              };
             }
+            return {
+              ...lesson,
+              video: lesson.video instanceof File ? null : lesson.video
+            };
           });
+
+          // Добавляем уроки с индексами видео
+          formDataToSend.append(key, JSON.stringify(lessonsWithVideoPaths));
         } else if (key === 'quizzes') {
-          formDataToSend.append('quizzes', JSON.stringify(backendData[key]));
+          formDataToSend.append(key, JSON.stringify(backendData[key]));
         } else if (key !== 'thumbnail') {
           formDataToSend.append(key, backendData[key]);
         }
       });
-      await coursesAPI.update(id, formDataToSend);
-      navigate('/dashboard');
+
+      console.log('Sending data to backend:', {
+        lessons: JSON.parse(formDataToSend.get('lessons')),
+        quizzes: JSON.parse(formDataToSend.get('quizzes'))
+      });
+
+      const response = await coursesAPI.update(id, formDataToSend);
+
+      // Обновляем состояние после успешного сохранения
+      const updatedCourse = response.data;
+      setFormData({
+        ...formData,
+        modules: updatedCourse.modules || []
+      });
+
+      // Показываем сообщение об успехе
+      setSuccess('Курс успешно обновлен');
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 2000);
     } catch (err) {
+      console.error('Error updating course:', err);
       setError(err.response?.data?.message || 'Ошибка при обновлении курса');
+    } finally {
       setLoading(false);
     }
   };
@@ -368,46 +402,137 @@ const CourseEdit = () => {
   // Открыть форму лекции для модуля
   const handleOpenLesson = (idx) => {
     setEditingModuleIndex(idx);
-    setCurrentLesson(modules[idx].lesson && typeof modules[idx].lesson === 'object'
-      ? { ...modules[idx].lesson, resources: Array.isArray(modules[idx].lesson.resources) ? modules[idx].lesson.resources : [] }
-      : {
-          title: '',
-          description: '',
-          duration: '',
-          video: null,
-          resources: [''],
-          order: idx + 1
-        });
+    const module = modules[idx];
+    setCurrentLesson(module.lesson || {
+      title: '',
+      description: '',
+      duration: '',
+      video: null,
+      resources: [''],
+      order: idx + 1
+    });
     setLessonDialogOpen(true);
   };
 
   // Открыть форму теста для модуля
   const handleOpenQuiz = (idx) => {
     setEditingModuleIndex(idx);
-    setCurrentQuiz(modules[idx].quiz && typeof modules[idx].quiz === 'object'
-      ? modules[idx].quiz
-      : {
-          title: '',
-          description: '',
-          questions: []
-        });
+    const module = modules[idx];
+    console.log('Opening quiz form for module:', module);
+    
+    // Если в модуле уже есть тест, используем его данные
+    if (module.quiz) {
+      console.log('Existing quiz data:', module.quiz);
+      setCurrentQuiz({
+        title: module.quiz.title || '',
+        description: module.quiz.description || '',
+        passingScore: module.quiz.passingScore || 1,
+        questions: module.quiz.questions.map(q => ({
+          question: q.question,
+          type: q.type || 'single',
+          options: q.options.map((opt, idx) => ({
+            text: typeof opt === 'object' ? opt.text : opt,
+            isCorrect: idx === q.correctOption
+          })),
+          correctOption: q.correctOption
+        }))
+      });
+    } else {
+      // Если теста нет, создаем новый
+      setCurrentQuiz(emptyQuiz());
+    }
     setQuizDialogOpen(true);
   };
 
   // Сохранить лекцию в модуле
   const handleSaveLesson = () => {
+    if (!currentLesson.title || !currentLesson.description || !currentLesson.duration) {
+      setError('Пожалуйста, заполните все обязательные поля лекции');
+      return;
+    }
+
     const newModules = [...modules];
-    newModules[editingModuleIndex].lesson = currentLesson;
+    newModules[editingModuleIndex] = {
+      ...newModules[editingModuleIndex],
+      lesson: {
+        ...currentLesson,
+        order: editingModuleIndex + 1
+      }
+    };
     setModules(newModules);
     setLessonDialogOpen(false);
   };
 
   // Сохранить тест в модуле
   const handleSaveQuiz = () => {
+    // Валидация
+    if (!currentQuiz.title) {
+      setError('Пожалуйста, введите название теста');
+      return;
+    }
+
+    if (!currentQuiz.questions || currentQuiz.questions.length === 0) {
+      setError('Пожалуйста, добавьте хотя бы один вопрос');
+      return;
+    }
+
+    // Проверяем каждый вопрос
+    for (const q of currentQuiz.questions) {
+      if (!q.question) {
+        setError('Пожалуйста, заполните текст вопроса');
+        return;
+      }
+
+      if (!q.options || q.options.length < 2) {
+        setError('Пожалуйста, добавьте хотя бы два варианта ответа');
+        return;
+      }
+
+      // Проверяем, что все варианты ответов заполнены
+      for (const opt of q.options) {
+        if (!opt || (typeof opt === 'object' && !opt.text)) {
+          setError('Пожалуйста, заполните все варианты ответов');
+          return;
+        }
+      }
+
+      // Проверяем, что выбран правильный ответ
+      if (q.correctOption === undefined || q.correctOption === null) {
+        setError('Пожалуйста, выберите правильный ответ');
+        return;
+      }
+    }
+
+    // Форматируем данные теста
+    const formattedQuiz = {
+      title: currentQuiz.title,
+      description: currentQuiz.description || '',
+      passingScore: currentQuiz.passingScore || 1,
+      order: editingModuleIndex + 1,
+      questions: currentQuiz.questions.map(q => ({
+        question: q.question,
+        type: q.type || 'single',
+        options: q.options.map((opt, idx) => ({
+          text: typeof opt === 'object' ? opt.text : opt,
+          isCorrect: idx === q.correctOption
+        })),
+        correctOption: q.correctOption
+      }))
+    };
+
+    console.log('Saving formatted quiz:', formattedQuiz);
+
+    // Обновляем модули
     const newModules = [...modules];
-    newModules[editingModuleIndex].quiz = currentQuiz;
+    newModules[editingModuleIndex] = {
+      ...newModules[editingModuleIndex],
+      quiz: formattedQuiz
+    };
     setModules(newModules);
+
+    // Закрываем диалог
     setQuizDialogOpen(false);
+    setCurrentQuiz(emptyQuiz());
   };
 
   // Удалить модуль
@@ -417,21 +542,65 @@ const CourseEdit = () => {
 
   // Преобразование для бэкенда
   const prepareDataForBackend = () => {
-    const lessons = modules.map((m, i) => m.lesson ? { ...m.lesson, order: i + 1 } : null).filter(Boolean);
-    const quizzes = modules.map((m, i) => m.quiz ? {
-      ...m.quiz,
-      order: i + 1,
-      passingScore: m.quiz.passingScore || 1,
-      questions: (m.quiz.questions || []).map(q => ({
-        ...q,
-        type: q.type || 'single',
-        options: (q.options || []).map((opt, idx) => ({
-          text: typeof opt === 'object' ? opt.text : opt,
-          isCorrect: idx === q.correctOption
-        }))
-      }))
-    } : null).filter(Boolean);
-    return { ...formData, lessons, quizzes };
+    const data = {
+      title: formData.title,
+      description: formData.description,
+      category: formData.category,
+      level: formData.level,
+      price: formData.price,
+      requirements: formData.requirements,
+      learningObjectives: formData.learningObjectives,
+      lessons: [],
+      quizzes: []
+    };
+
+    // Добавляем уроки
+    modules.forEach((module, index) => {
+      if (module.lesson) {
+        const lessonData = {
+          title: module.lesson.title,
+          description: module.lesson.description,
+          duration: module.lesson.duration,
+          order: index + 1,
+          resources: module.lesson.resources || []
+        };
+
+        // Если есть новое видео, используем его
+        if (module.lesson.video instanceof File) {
+          lessonData.video = module.lesson.video;
+        } 
+        // Если есть существующее видео, используем его путь
+        else if (module.lesson.video) {
+          lessonData.video = module.lesson.video;
+        }
+
+        data.lessons.push(lessonData);
+      }
+    });
+
+    // Добавляем тесты
+    modules.forEach((module, index) => {
+      if (module.quiz) {
+        data.quizzes.push({
+          title: module.quiz.title,
+          description: module.quiz.description,
+          questions: module.quiz.questions.map(q => ({
+            question: q.question,
+            type: q.type || 'single',
+            options: q.options.map((opt, idx) => ({
+              text: typeof opt === 'object' ? opt.text : opt,
+              isCorrect: idx === q.correctOption
+            })),
+            correctOption: q.correctOption,
+            points: 1
+          })),
+          passingScore: module.quiz.passingScore || 1,
+          order: index + 1
+        });
+      }
+    });
+
+    return data;
   };
 
   if (loading) {
@@ -447,6 +616,16 @@ const CourseEdit = () => {
       <Container>
         <Alert severity="error" sx={{ mt: 4 }}>
           {error}
+        </Alert>
+      </Container>
+    );
+  }
+
+  if (success) {
+    return (
+      <Container>
+        <Alert severity="success" sx={{ mt: 4 }}>
+          {success}
         </Alert>
       </Container>
     );
@@ -670,6 +849,9 @@ const CourseEdit = () => {
               {mod.quiz && (
                 <Box sx={{ mt: 1, ml: 2 }}>
                   <Typography variant="body2">Тест: {mod.quiz?.title || ''}</Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Вопросов: {mod.quiz?.questions?.length || 0}
+                  </Typography>
                 </Box>
               )}
             </Paper>

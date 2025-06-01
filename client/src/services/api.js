@@ -98,6 +98,14 @@ export const coursesAPI = {
       throw handleApiError(error);
     }
   },
+  getCourseProgress: async (courseId) => {
+    try {
+      const response = await api.get(`/courses/${courseId}/progress`);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
   updateLessonProgress: async (courseId, lessonId, progress) => {
     try {
       const response = await api.put(`/courses/${courseId}/lessons/${lessonId}/progress`, { progress });
@@ -105,6 +113,17 @@ export const coursesAPI = {
     } catch (error) {
       throw handleApiError(error);
     }
+  },
+  updateProgress: async (courseId, progressData) => {
+    try {
+      const response = await api.put(`/courses/${courseId}/progress`, progressData);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+  leaveCourse: (courseId) => {
+    return api.post(`/courses/${courseId}/leave`);
   }
 };
 
@@ -115,6 +134,18 @@ export const lessonsAPI = {
   update: (id, lessonData) => api.put(`/lessons/${id}`, lessonData),
   delete: (id) => api.delete(`/lessons/${id}`),
   complete: (id) => api.post(`/lessons/${id}/complete`)
+};
+
+export const quizAPI = {
+  getQuiz: async (id) => {
+    const response = await api.get(`/quizzes/${id}`);
+    return response.data;
+  },
+
+  submitQuiz: async (id, answers) => {
+    const response = await api.post(`/quizzes/${id}/submit`, { answers });
+    return response.data;
+  }
 };
 
 export default api; 

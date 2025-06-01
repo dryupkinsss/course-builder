@@ -33,6 +33,7 @@ import {
   AttachFile as AttachFileIcon
 } from '@mui/icons-material';
 import { lessonsAPI, coursesAPI } from '../../services/api';
+import QuizComponent from '../quiz/QuizComponent';
 
 const LessonDetail = () => {
   const { courseId, lessonId } = useParams();
@@ -48,6 +49,11 @@ const LessonDetail = () => {
   const [currentLessonIndex, setCurrentLessonIndex] = useState(-1);
   const [comment, setComment] = useState('');
   const [progress, setProgress] = useState(0);
+  const [lessonsProgress, setLessonsProgress] = useState({});
+  const [courseProgress, setCourseProgress] = useState(0);
+  const [showQuiz, setShowQuiz] = useState(false);
+  const [quizCompleted, setQuizCompleted] = useState(false);
+  const [quizzesProgress, setQuizzesProgress] = useState({});
 
   useEffect(() => {
     let isMounted = true;
@@ -59,7 +65,58 @@ const LessonDetail = () => {
         return;
       }
 
+      if (!user || !user._id) {
+        setLoading(false);
+        return;
+      }
+
       try {
+        // Сначала получаем прогресс, чтобы иметь актуальные данные
+        const progressResponse = await coursesAPI.getStudentProgress(user._id, courseId);
+        console.log('Progress Response:', progressResponse); // Debug log
+        
+        if (isMounted) {
+          // Устанавливаем общий прогресс курса
+          setCourseProgress(progressResponse.totalProgress);
+          
+          // Создаем карту прогресса уроков
+          const progressMap = {};
+          progressResponse.lessons.forEach(l => {
+            progressMap[l._id] = {
+              progress: l.progress,
+              status: l.status,
+              lastAccessed: l.lastAccessed,
+              completedAt: l.completedAt
+            };
+          });
+          setLessonsProgress(progressMap);
+
+          // Создаем карту прогресса тестов
+          const quizProgressMap = {};
+          if (Array.isArray(progressResponse.quizzes)) {
+            progressResponse.quizzes.forEach(q => {
+              console.log('Quiz Progress:', q); // Debug log
+              quizProgressMap[q.quiz] = {
+                progress: q.progress,
+                status: q.status,
+                lastAccessed: q.lastAccessed,
+                completedAt: q.completedAt,
+                quizAttempts: q.quizAttempts
+              };
+            });
+          }
+          console.log('Quiz Progress Map:', quizProgressMap); // Debug log
+          setQuizzesProgress(quizProgressMap);
+
+          // Устанавливаем прогресс текущего урока
+          const currentLessonProgress = progressMap[lessonId];
+          if (currentLessonProgress) {
+            setProgress(currentLessonProgress.progress);
+            setIsCompleted(currentLessonProgress.status === 'completed');
+          }
+        }
+
+        // Затем получаем данные курса и урока
         const [courseResponse, lessonResponse] = await Promise.all([
           coursesAPI.getById(courseId),
           lessonsAPI.getById(lessonId)
@@ -75,20 +132,6 @@ const LessonDetail = () => {
           setCourse(courseData);
           setLesson(lessonData);
           setCurrentLessonIndex(lessonIndex);
-
-          // Получаем прогресс по уроку
-          try {
-            const progressResponse = await coursesAPI.getStudentProgress(user._id, courseId);
-            const lessonProgress = progressResponse.data.lessons.find(
-              l => l._id === lessonId
-            );
-            if (lessonProgress) {
-              setProgress(lessonProgress.progress);
-              setIsCompleted(lessonProgress.status === 'completed');
-            }
-          } catch (err) {
-            console.error('Ошибка при получении прогресса:', err);
-          }
         }
       } catch (err) {
         console.error('Ошибка при загрузке данных:', err);
@@ -107,7 +150,7 @@ const LessonDetail = () => {
     return () => {
       isMounted = false;
     };
-  }, [courseId, lessonId]);
+  }, [courseId, lessonId, user]);
 
   const handleCommentSubmit = (e) => {
     e.preventDefault();
@@ -119,14 +162,32 @@ const LessonDetail = () => {
   };
 
   const handleComplete = async () => {
+    if (!user || !user._id) {
+      setError('Необходимо авторизоваться');
+      return;
+    }
+
     try {
-      await lessonsAPI.complete(lessonId);
-      setIsCompleted(true);
+      const response = await lessonsAPI.complete(lessonId);
+      setProgress(100);
+      setCourseProgress(response.totalProgress);
       
-      // Обновляем прогресс до 100%
-      await updateProgress(100);
-    } catch (err) {
-      setError('Ошибка при отметке урока как пройденного');
+      // Проверяем наличие теста
+      if (response.quiz && !response.quizCompleted) {
+        setShowQuiz(true);
+      }
+    } catch (error) {
+      console.error('Error completing lesson:', error);
+      setError('Ошибка при завершении урока');
+    }
+  };
+
+  const handleQuizComplete = (result) => {
+    setQuizCompleted(true);
+    setShowQuiz(false);
+    // Обновляем прогресс курса после завершения теста
+    if (result.progress) {
+      setCourseProgress(result.progress.totalProgress);
     }
   };
 
@@ -172,60 +233,160 @@ const LessonDetail = () => {
       );
     }
 
-    if (course.lessons.length === 0) {
+    // Создаем массив всех элементов (уроки + тесты)
+    const allItems = [];
+    
+    // Добавляем уроки и их тесты
+    course.lessons.forEach((lesson, index) => {
+      // Добавляем урок
+      allItems.push({
+        ...lesson,
+        type: 'lesson'
+      });
+
+      // Находим тест для этого урока (берем тест с соответствующим индексом)
+      const quiz = course.quizzes?.[index];
+      if (quiz) {
+        allItems.push({
+          ...quiz,
+          type: 'quiz',
+          title: quiz.title,
+          duration: 0
+        });
+      }
+    });
+
+    if (allItems.length === 0) {
       return (
         <ListItem>
-          <ListItemText primary="Уроки отсутствуют" />
+          <ListItemText primary="Уроки и тесты отсутствуют" />
         </ListItem>
       );
     }
 
-    return course.lessons.map((l, index) => {
-      if (!l?._id) {
-        console.error('Invalid lesson data:', l);
-        return null;
+    return allItems.map((item, index) => {
+      let isCompleted = false;
+      if (item.type === 'lesson') {
+        const lessonProgress = lessonsProgress[item._id];
+        isCompleted = lessonProgress?.status === 'completed';
+      } else if (item.type === 'quiz') {
+        const quizProgress = quizzesProgress[item._id];
+        console.log('Checking quiz progress for:', item._id, quizProgress); // Debug log
+        
+        // Проверяем наличие попыток в обоих местах
+        const hasProgressAttempts = quizProgress?.quizAttempts && quizProgress.quizAttempts.length > 0;
+        const hasQuizAttempts = course.quizzes?.find(q => q._id === item._id)?.attempts?.length > 0;
+        
+        // Тест считается пройденным, если есть хотя бы одна попытка в любом месте
+        isCompleted = hasProgressAttempts || hasQuizAttempts;
       }
 
       return (
-        <React.Fragment key={l._id}>
+        <React.Fragment key={item._id}>
           <ListItem
             button
-            selected={l._id === lessonId}
-            onClick={() => navigateToLesson(index)}
+            selected={item._id === lessonId}
+            onClick={() => {
+              if (item.type === 'quiz') {
+                const quizProgress = quizzesProgress[item._id];
+                if (quizProgress?.status === 'completed' || 
+                    quizProgress?.progress === 100 || 
+                    (quizProgress?.quizAttempts && quizProgress.quizAttempts.length > 0)) {
+                  // Если тест уже пройден, показываем сообщение
+                  alert('Этот тест уже пройден');
+                  return;
+                }
+                navigate(`/quiz/${item._id}`);
+              } else {
+                navigateToLesson(course.lessons.findIndex(l => l._id === item._id));
+              }
+            }}
+            sx={{
+              pl: item.type === 'quiz' ? 4 : 2, // Отступ для тестов
+              backgroundColor: item.type === 'quiz' ? 'rgba(0, 0, 0, 0.02)' : 'inherit', // Фон для тестов
+              borderLeft: item.type === 'quiz' ? '2px solid #1976d2' : 'none' // Добавляем линию слева для тестов
+            }}
           >
             <ListItemIcon>
-              {l._id === lessonId ? (
+              {item._id === lessonId ? (
                 <PlayIcon color="primary" />
               ) : (
                 <CheckIcon
-                  color={user?.completedLessons?.includes(l._id)
-                    ? 'success'
-                    : 'disabled'
-                  }
+                  color={isCompleted ? 'success' : 'disabled'}
                 />
               )}
             </ListItemIcon>
             <ListItemText
-              primary={l.title || 'Урок ' + (index + 1)}
-              secondary={l.duration ? `${l.duration} минут` : ''}
+              primary={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography component="span">
+                    {item.title}
+                  </Typography>
+                  {item.type === 'quiz' && (
+                    <Chip
+                      size="small"
+                      label={isCompleted ? "Тест пройден" : "Тест"}
+                      color={isCompleted ? "success" : "primary"}
+                      sx={{ ml: 1 }}
+                    />
+                  )}
+                </Box>
+              }
+              secondary={item.type === 'lesson' && item.duration ? `${item.duration} минут` : ''}
             />
           </ListItem>
-          {index < course.lessons.length - 1 && <Divider />}
+          {index < allItems.length - 1 && <Divider />}
         </React.Fragment>
       );
-    }).filter(Boolean);
+    });
   };
 
   const updateProgress = async (newProgress) => {
+    if (!user || !user._id) {
+      setError('Необходимо авторизоваться');
+      return;
+    }
+
     try {
+      // Обновляем прогресс урока
       await coursesAPI.updateLessonProgress(courseId, lessonId, newProgress);
       setProgress(newProgress);
       
-      // Если прогресс 100%, отмечаем урок как завершенный
+      // Обновляем прогресс в общем состоянии
+      const updatedLessonsProgress = {
+        ...lessonsProgress,
+        [lessonId]: { 
+          progress: newProgress, 
+          status: newProgress === 100 ? 'completed' : 'in_progress',
+          lastAccessed: new Date().toISOString(),
+          completedAt: newProgress === 100 ? new Date().toISOString() : null
+        }
+      };
+      setLessonsProgress(updatedLessonsProgress);
+
+      // Обновляем общий прогресс курса
+      const oldProgress = progress;
+      const newCourseProgress = Math.round(((courseProgress * course.lessons.length - oldProgress + newProgress) / (course.lessons.length * 100)) * 100);
+      setCourseProgress(newCourseProgress);
+
+      // Обновляем прогресс курса на сервере
+      await coursesAPI.updateProgress(courseId, {
+        progress: newCourseProgress,
+        lessons: Object.entries(updatedLessonsProgress).map(([id, data]) => ({
+          lessonId: id,
+          progress: data.progress,
+          status: data.status,
+          lastAccessed: data.lastAccessed,
+          completedAt: data.completedAt
+        }))
+      });
+      
+      // Если прогресс 100%, обновляем состояние завершенности
       if (newProgress === 100) {
-        await handleComplete();
+        setIsCompleted(true);
       }
     } catch (err) {
+      console.error('Ошибка при обновлении прогресса:', err);
       setError('Ошибка при обновлении прогресса');
     }
   };
@@ -270,12 +431,30 @@ const LessonDetail = () => {
     const hasPrevLesson = currentLessonIndex > 0;
 
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        {/* Заголовок */}
+        <Box sx={{ 
+          mb: 4, 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 2,
+          height: '64px'
+        }}>
           <IconButton onClick={() => navigate(`/courses/${courseId}`)}>
             <ArrowBackIcon />
           </IconButton>
-          <Typography variant="h4">
+          <Typography 
+            variant="h4" 
+            sx={{ 
+              fontWeight: 600,
+              fontSize: { xs: '1.5rem', sm: '2rem' },
+              lineHeight: 1.2,
+              flex: 1,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}
+          >
             {lesson.title}
           </Typography>
           {isTeacher && (
@@ -283,17 +462,107 @@ const LessonDetail = () => {
               variant="outlined"
               startIcon={<EditIcon />}
               onClick={() => navigate(`/courses/${courseId}/lessons/${lessonId}/edit`)}
+              sx={{ 
+                ml: 'auto',
+                minWidth: '160px',
+                height: '40px'
+              }}
             >
               Редактировать
             </Button>
           )}
         </Box>
 
-        <Grid container spacing={4}>
-          <Grid item xs={12} md={8}>
-            <Paper sx={{ p: 2, mb: 3 }}>
+        {/* Прогресс курса */}
+        <Paper sx={{ 
+          p: 2, 
+          mb: 3, 
+          borderRadius: 2,
+          height: '80px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 500, mr: 2, minWidth: '120px' }}>
+              Прогресс курса
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ minWidth: '40px' }}>
+              {courseProgress}%
+            </Typography>
+          </Box>
+          <LinearProgress 
+            variant="determinate" 
+            value={courseProgress} 
+            sx={{ 
+              height: 8, 
+              borderRadius: 4,
+              backgroundColor: 'rgba(0, 0, 0, 0.08)',
+              '& .MuiLinearProgress-bar': {
+                borderRadius: 4,
+              }
+            }}
+          />
+        </Paper>
+
+        <Grid container spacing={3} alignItems="flex-start">
+          {/* Навигация слева */}
+          <Grid item xs={12} md={3}>
+            <Paper 
+              sx={{ 
+                p: 2, 
+                height: 'calc(100vh - 200px)', 
+                position: 'sticky',
+                top: 20,
+                overflow: 'auto',
+                borderRadius: 2,
+                boxShadow: 2,
+                '& .MuiListItem-root': {
+                  minHeight: '48px',
+                  px: 1
+                }
+              }}
+            >
+              <Typography 
+                variant="h6" 
+                gutterBottom 
+                sx={{ 
+                  fontWeight: 600, 
+                  px: 1,
+                  height: '40px',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                Навигация
+              </Typography>
+              <List sx={{ p: 0 }}>
+                {renderLessonsList()}
+              </List>
+            </Paper>
+          </Grid>
+
+          {/* Основной контент по центру */}
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ 
+              p: 2, 
+              mb: 3, 
+              borderRadius: 2, 
+              boxShadow: 2,
+              minHeight: '500px',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'flex-start'
+            }}>
               {lesson.video ? (
-                <Box sx={{ position: 'relative', paddingTop: '56.25%' }}>
+                <Box sx={{ 
+                  position: 'relative', 
+                  paddingTop: '56.25%',
+                  backgroundColor: '#000',
+                  borderRadius: '8px',
+                  overflow: 'hidden'
+                }}>
                   <video
                     controls
                     style={{
@@ -301,174 +570,302 @@ const LessonDetail = () => {
                       top: 0,
                       left: 0,
                       width: '100%',
-                      height: '100%'
+                      height: '100%',
+                      borderRadius: '8px'
                     }}
                     src={getVideoUrl(lesson.video)}
                   />
                 </Box>
               ) : (
-                <Box mb={3}>
-                  <Alert severity="info">
+                <Box sx={{ 
+                  p: 3, 
+                  textAlign: 'center',
+                  height: '300px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Alert severity="info" sx={{ width: '100%' }}>
                     Видео для этого урока отсутствует
                   </Alert>
                 </Box>
               )}
             </Paper>
 
-            <Paper sx={{ p: 3, mb: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Описание урока
-              </Typography>
-              <Typography variant="body1" paragraph>
-                {lesson.description || 'Описание отсутствует'}
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                <Chip
-                  icon={<PlayIcon />}
-                  label={`${lesson.duration || 0} минут`}
-                  variant="outlined"
-                />
-                {isCompleted && (
-                  <Chip
-                    icon={<CheckIcon />}
-                    label="Пройден"
-                    color="success"
-                  />
-                )}
-              </Box>
-            </Paper>
-
-            {Array.isArray(lesson.resources) && lesson.resources.length > 0 && (
-              <Paper sx={{ p: 3 }}>
-                <Typography variant="h6" gutterBottom>
-                  Дополнительные ресурсы
-                </Typography>
-                <List>
-                  {lesson.resources.map((resource, index) => (
-                    <ListItem key={index}>
-                      <ListItemIcon>
-                        <LinkIcon />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={resource}
-                        secondary="Ссылка на ресурс"
-                      />
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        href={resource}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Открыть
-                      </Button>
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-            )}
+            {/* Кнопки навигации по урокам */}
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              mb: 3,
+              gap: 2
+            }}>
+              <Button
+                variant="outlined"
+                startIcon={<ArrowBackIcon />}
+                onClick={() => navigateToLesson(currentLessonIndex - 1)}
+                disabled={!hasPrevLesson}
+                sx={{ 
+                  borderRadius: 2,
+                  minWidth: '160px',
+                  height: '40px'
+                }}
+              >
+                Предыдущий урок
+              </Button>
+              {isStudent && !isCompleted && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleComplete}
+                  sx={{ 
+                    borderRadius: 2,
+                    minWidth: '200px',
+                    height: '40px'
+                  }}
+                >
+                  Отметить как пройденный
+                </Button>
+              )}
+              <Button
+                variant="outlined"
+                endIcon={<ArrowForwardIcon />}
+                onClick={() => navigateToLesson(currentLessonIndex + 1)}
+                disabled={!hasNextLesson}
+                sx={{ 
+                  borderRadius: 2,
+                  minWidth: '160px',
+                  height: '40px'
+                }}
+              >
+                Следующий урок
+              </Button>
+            </Box>
           </Grid>
 
-          <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Навигация по урокам
-              </Typography>
-              <List>
-                {renderLessonsList()}
-              </List>
-            </Paper>
+          {/* Правая колонка с описанием и ресурсами */}
+          <Grid item xs={12} md={3} sx={{ alignSelf: 'flex-start' }}>
+            <Box sx={{ width: 340, maxWidth: '100%', display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <Paper sx={{ 
+                p: 2, 
+                borderRadius: 2, 
+                boxShadow: 2,
+                minHeight: '200px',
+                maxHeight: '220px',
+                height: '220px',
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                overflow: 'hidden'
+              }}>
+                <Typography 
+                  variant="h6" 
+                  gutterBottom 
+                  sx={{ 
+                    fontWeight: 600,
+                    height: '40px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    flexShrink: 0
+                  }}
+                >
+                  Описание урока
+                </Typography>
+                <Box sx={{
+                  flex: 1,
+                  minHeight: '60px',
+                  maxHeight: '100px',
+                  overflow: 'auto',
+                  mb: 2
+                }}>
+                  <Typography 
+                    variant="body1" 
+                    paragraph
+                    sx={{
+                      overflowWrap: 'break-word',
+                      wordBreak: 'break-word',
+                      whiteSpace: 'pre-line',
+                      m: 0,
+                      width: '100%'
+                    }}
+                  >
+                    {lesson.description || 'Описание отсутствует'}
+                  </Typography>
+                </Box>
+                <Box sx={{ 
+                  display: 'flex', 
+                  gap: 1, 
+                  flexWrap: 'wrap',
+                  mt: 'auto',
+                  flexShrink: 0
+                }}>
+                  <Chip
+                    icon={<PlayIcon />}
+                    label={`${lesson.duration || 0} минут`}
+                    variant="outlined"
+                    sx={{ borderRadius: 1 }}
+                  />
+                  {isCompleted && (
+                    <Chip
+                      icon={<CheckIcon />}
+                      label="Пройден"
+                      color="success"
+                      sx={{ borderRadius: 1 }}
+                    />
+                  )}
+                </Box>
+              </Paper>
+
+              {Array.isArray(lesson.resources) && lesson.resources.length > 0 && (
+                <Paper sx={{ 
+                  p: 2, 
+                  borderRadius: 2, 
+                  boxShadow: 2,
+                  minHeight: '200px',
+                  maxHeight: '220px',
+                  height: '220px',
+                  width: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden'
+                }}>
+                  <Typography 
+                    variant="h6" 
+                    gutterBottom 
+                    sx={{ 
+                      fontWeight: 600,
+                      height: '40px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      flexShrink: 0
+                    }}
+                  >
+                    Дополнительные ресурсы
+                  </Typography>
+                  <Box sx={{ flex: 1, overflow: 'auto', minHeight: '60px', maxHeight: '140px' }}>
+                    <List>
+                      {lesson.resources.map((resource, index) => (
+                        <ListItem 
+                          key={index}
+                          sx={{ 
+                            p: 1,
+                            minHeight: '48px',
+                            '&:hover': {
+                              backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                              borderRadius: 1
+                            }
+                          }}
+                        >
+                          <ListItemIcon sx={{ minWidth: '40px' }}>
+                            <LinkIcon color="primary" />
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={
+                              <Typography
+                                sx={{
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  maxWidth: '90px',
+                                  fontSize: '0.95rem'
+                                }}
+                              >
+                                {resource}
+                              </Typography>
+                            }
+                            secondary="Ссылка на ресурс"
+                          />
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            href={resource}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            sx={{ 
+                              borderRadius: 1,
+                              minWidth: '100px',
+                              height: '32px'
+                            }}
+                          >
+                            Открыть
+                          </Button>
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Box>
+                </Paper>
+              )}
+            </Box>
           </Grid>
         </Grid>
 
-        <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-between' }}>
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigateToLesson(currentLessonIndex - 1)}
-            disabled={!hasPrevLesson}
-          >
-            Предыдущий урок
-          </Button>
-          {isStudent && !isCompleted && (
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={handleComplete}
-            >
-              Отметить как пройденный
-            </Button>
-          )}
-          <Button
-            variant="outlined"
-            endIcon={<ArrowForwardIcon />}
-            onClick={() => navigateToLesson(currentLessonIndex + 1)}
-            disabled={!hasNextLesson}
-          >
-            Следующий урок
-          </Button>
-        </Box>
-
-        {/* Добавляем индикатор прогресса */}
-        <Box sx={{ mt: 3, mb: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            Прогресс прохождения урока
-          </Typography>
-          <LinearProgress 
-            variant="determinate" 
-            value={progress} 
-            sx={{ height: 10, borderRadius: 5, mb: 1 }}
-          />
-          <Typography variant="body2" color="text.secondary" align="right">
-            {progress}%
-          </Typography>
-        </Box>
-
-        {/* Кнопки для обновления прогресса */}
-        <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-          <Button
-            variant="contained"
-            onClick={() => updateProgress(Math.min(progress + 25, 100))}
-            disabled={progress >= 100}
-          >
-            Отметить как частично пройденный
-          </Button>
-          <Button
-            variant="contained"
-            color="success"
-            onClick={() => updateProgress(100)}
-            disabled={progress >= 100}
-          >
-            Отметить как пройденный
-          </Button>
-        </Box>
-
+        {/* Комментарии */}
         {Array.isArray(lesson.comments) && lesson.comments.length > 0 && (
-          <Paper sx={{ p: 3, mt: 4 }}>
-            <Typography variant="h6" gutterBottom>
+          <Paper sx={{ 
+            p: 3, 
+            mt: 4, 
+            borderRadius: 2, 
+            boxShadow: 2,
+            minHeight: '200px'
+          }}>
+            <Typography 
+              variant="h6" 
+              gutterBottom 
+              sx={{ 
+                fontWeight: 600,
+                height: '40px',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+            >
               Комментарии
             </Typography>
             <List>
               {lesson.comments.map((comment, index) => (
                 <React.Fragment key={index}>
-                  <ListItem alignItems="flex-start">
-                    <ListItemIcon>
-                      <CommentIcon />
+                  <ListItem 
+                    alignItems="flex-start" 
+                    sx={{ 
+                      px: 0,
+                      minHeight: '80px'
+                    }}
+                  >
+                    <ListItemIcon sx={{ minWidth: '40px' }}>
+                      <CommentIcon color="primary" />
                     </ListItemIcon>
                     <ListItemText
-                      primary={comment.user}
-                      secondary={
-                        <>
-                          <Typography
-                            component="span"
-                            variant="body2"
-                            color="text.primary"
+                      primary={
+                        <Box sx={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: 1,
+                          minHeight: '24px'
+                        }}>
+                          <Typography 
+                            component="span" 
+                            variant="subtitle2" 
+                            sx={{ fontWeight: 600 }}
                           >
-                            {comment.text}
+                            {comment.user}
                           </Typography>
-                          <br />
-                          {comment.date}
-                        </>
+                          <Typography variant="caption" color="text.secondary">
+                            {comment.date}
+                          </Typography>
+                        </Box>
+                      }
+                      secondary={
+                        <Typography
+                          component="span"
+                          variant="body2"
+                          color="text.primary"
+                          sx={{ 
+                            display: 'block', 
+                            mt: 0.5,
+                            minHeight: '40px'
+                          }}
+                        >
+                          {comment.text}
+                        </Typography>
                       }
                     />
                   </ListItem>
@@ -476,7 +873,14 @@ const LessonDetail = () => {
                 </React.Fragment>
               ))}
             </List>
-            <Box component="form" onSubmit={handleCommentSubmit} sx={{ mt: 2 }}>
+            <Box 
+              component="form" 
+              onSubmit={handleCommentSubmit} 
+              sx={{ 
+                mt: 2,
+                minHeight: '120px'
+              }}
+            >
               <TextField
                 fullWidth
                 multiline
@@ -491,11 +895,26 @@ const LessonDetail = () => {
                 variant="contained"
                 endIcon={<SendIcon />}
                 disabled={!comment.trim()}
+                sx={{ 
+                  borderRadius: 2,
+                  minWidth: '160px',
+                  height: '40px'
+                }}
               >
                 Отправить
               </Button>
             </Box>
           </Paper>
+        )}
+
+        {/* Тест */}
+        {showQuiz && !quizCompleted && lesson?.quiz && (
+          <Box mt={4}>
+            <QuizComponent
+              id={lesson.quiz._id}
+              onComplete={handleQuizComplete}
+            />
+          </Box>
         )}
       </Container>
     );

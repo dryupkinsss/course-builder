@@ -33,6 +33,7 @@ const StudentDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [enrolledCourses, setEnrolledCourses] = useState([]);
+  const [coursesProgress, setCoursesProgress] = useState({});
   const [stats, setStats] = useState({
     completedLessons: 0,
     totalLessons: 0,
@@ -50,6 +51,24 @@ const StudentDashboard = () => {
     try {
       const response = await coursesAPI.getEnrolledCourses();
       setEnrolledCourses(response.data);
+      
+      // Получаем прогресс для каждого курса
+      const progressPromises = response.data.map(async (course) => {
+        try {
+          const progress = await coursesAPI.getCourseProgress(course._id);
+          return { courseId: course._id, progress };
+        } catch (err) {
+          console.error(`Ошибка при получении прогресса для курса ${course._id}:`, err);
+          return { courseId: course._id, progress: null };
+        }
+      });
+
+      const progressResults = await Promise.all(progressPromises);
+      const progressMap = progressResults.reduce((acc, { courseId, progress }) => {
+        acc[courseId] = progress;
+        return acc;
+      }, {});
+      setCoursesProgress(progressMap);
       
       // Подсчет статистики
       let completedLessons = 0;
@@ -89,6 +108,20 @@ const StudentDashboard = () => {
       setError('Ошибка при загрузке данных');
       setLoading(false);
     }
+  };
+
+  const hasStartedCourse = (courseId) => {
+    const progress = coursesProgress[courseId];
+    if (!progress) return false;
+    return progress.lessons.some(lesson => lesson.progress > 0);
+  };
+
+  const getNextLessonId = (course) => {
+    const progress = coursesProgress[course._id];
+    if (!progress || !course.lessons) return course.lessons[0]?._id;
+    
+    const incompleteLesson = progress.lessons.find(lesson => lesson.progress < 100);
+    return incompleteLesson?._id || course.lessons[0]?._id;
   };
 
   if (!user) {
@@ -230,20 +263,39 @@ const StudentDashboard = () => {
                 secondary={`${course.lessons?.length || 0} уроков`}
               />
               <ListItemSecondaryAction>
-                <Button
-                  variant="contained"
-                  startIcon={<PlayArrowIcon />}
-                  onClick={() => {
-                    if (Array.isArray(course.lessons) && course.lessons.length > 0 && course.lessons[0]?._id) {
-                      navigate(`/courses/${course._id}/lessons/${course.lessons[0]._id}`);
-                    } else {
-                      // Можно добавить уведомление пользователю
-                      console.warn('Нет доступных уроков в курсе');
-                    }
-                  }}
-                >
-                  Продолжить обучение
-                </Button>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    variant="contained"
+                    startIcon={<PlayArrowIcon />}
+                    onClick={() => {
+                      const nextLessonId = getNextLessonId(course);
+                      if (nextLessonId) {
+                        navigate(`/courses/${course._id}/lessons/${nextLessonId}`);
+                      } else {
+                        console.warn('Нет доступных уроков в курсе');
+                      }
+                    }}
+                    sx={{ mr: 1 }}
+                  >
+                    {hasStartedCourse(course._id) ? 'Продолжить обучение' : 'Начать обучение'}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    onClick={async () => {
+                      if (window.confirm('Вы уверены, что хотите покинуть этот курс?')) {
+                        try {
+                          await coursesAPI.leaveCourse(course._id);
+                          setEnrolledCourses(enrolledCourses.filter(c => c._id !== course._id));
+                        } catch (err) {
+                          setError('Ошибка при попытке покинуть курс');
+                        }
+                      }
+                    }}
+                  >
+                    Покинуть курс
+                  </Button>
+                </Box>
               </ListItemSecondaryAction>
             </ListItem>
             {index < enrolledCourses.length - 1 && <Divider />}
