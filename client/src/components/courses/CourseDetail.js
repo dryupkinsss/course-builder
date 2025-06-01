@@ -86,7 +86,8 @@ const CourseDetail = () => {
 
   const fetchCourseProgress = async () => {
     try {
-      const progress = await coursesAPI.getCourseProgress(id);
+      if (!user || !user._id) return;
+      const progress = await coursesAPI.getCourseProgress(id, user._id);
       setCourseProgress(progress);
     } catch (err) {
       console.error('Ошибка при получении прогресса:', err);

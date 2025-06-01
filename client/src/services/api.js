@@ -98,9 +98,9 @@ export const coursesAPI = {
       throw handleApiError(error);
     }
   },
-  getCourseProgress: async (courseId) => {
+  getCourseProgress: async (courseId, studentId) => {
     try {
-      const response = await api.get(`/courses/${courseId}/progress`);
+      const response = await api.get(`/courses/${courseId}/progress/${studentId}`);
       return response.data;
     } catch (error) {
       throw handleApiError(error);

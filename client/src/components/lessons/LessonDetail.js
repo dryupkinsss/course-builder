@@ -319,7 +319,14 @@ const LessonDetail = () => {
             <ListItemText
               primary={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography component="span">
+                  <Typography component="span" sx={{
+                    maxWidth: '200px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    display: 'inline-block',
+                    fontSize: '1rem',
+                  }}>
                     {item.title}
                   </Typography>
                   {item.type === 'quiz' && (
@@ -517,6 +524,9 @@ const LessonDetail = () => {
                 overflow: 'auto',
                 borderRadius: 2,
                 boxShadow: 2,
+                minWidth: '240px',
+                maxWidth: '320px',
+                width: '100%',
                 '& .MuiListItem-root': {
                   minHeight: '48px',
                   px: 1

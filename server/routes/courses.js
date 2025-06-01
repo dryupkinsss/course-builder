@@ -226,7 +226,8 @@ router.post('/', auth, upload.fields([
             quizzesData = req.body.quizzes;
         }
         const createdQuizzes = [];
-        for (const quiz of quizzesData) {
+        for (let i = 0; i < quizzesData.length; i++) {
+            const quiz = quizzesData[i];
             const quizDoc = new Quiz({
                 title: quiz.title,
                 description: quiz.description || '',
@@ -238,7 +239,9 @@ router.post('/', auth, upload.fields([
                 })),
                 passingScore: 1,
                 timeLimit: 0,
-                lesson: null // если нужен тест для всего курса, можно не указывать lesson
+                lesson: null, // если нужен тест для всего курса, можно не указывать lesson
+                course: course._id, // обязательно указываем course
+                order: i + 1 // обязательно указываем order
             });
             await quizDoc.save();
             createdQuizzes.push(quizDoc._id);
