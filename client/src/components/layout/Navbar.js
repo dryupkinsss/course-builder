@@ -110,6 +110,13 @@ const Navbar = () => {
                 >
                   Личный кабинет
                 </MenuItem>
+                <MenuItem
+                  component={RouterLink}
+                  to="/certificates"
+                  onClick={handleClose}
+                >
+                  Сертификаты
+                </MenuItem>
                 {user?.role === 'teacher' && (
                   <MenuItem
                     component={RouterLink}

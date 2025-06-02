@@ -18,7 +18,8 @@ import {
   Alert,
   CircularProgress,
   Chip,
-  LinearProgress
+  LinearProgress,
+  Link
 } from '@mui/material';
 import {
   PlayArrow as PlayIcon,
@@ -32,8 +33,9 @@ import {
   ArrowForward as ArrowForwardIcon,
   AttachFile as AttachFileIcon
 } from '@mui/icons-material';
-import { lessonsAPI, coursesAPI } from '../../services/api';
+import { lessonsAPI, coursesAPI, certificatesAPI } from '../../services/api';
 import QuizComponent from '../quiz/QuizComponent';
+import { Link as RouterLink } from 'react-router-dom';
 
 const LessonDetail = () => {
   const { courseId, lessonId } = useParams();
@@ -168,9 +170,67 @@ const LessonDetail = () => {
     }
 
     try {
+      // 1. Вызываем метод complete для урока
       const response = await lessonsAPI.complete(lessonId);
+      
+      // Обновляем прогресс урока
       setProgress(100);
+      setIsCompleted(true);
+      
+      // Обновляем прогресс в lessonsProgress
+      const updatedLessonsProgress = {
+        ...lessonsProgress,
+        [lessonId]: {
+          progress: 100,
+          status: 'completed',
+          lastAccessed: new Date().toISOString(),
+          completedAt: new Date().toISOString()
+        }
+      };
+      setLessonsProgress(updatedLessonsProgress);
+      
+      // Обновляем общий прогресс курса
       setCourseProgress(response.totalProgress);
+
+      // 2. Обновляем прогресс курса на сервере
+      await coursesAPI.updateProgress(courseId, {
+        progress: response.totalProgress,
+        lessons: Object.entries(updatedLessonsProgress).map(([id, data]) => ({
+          lessonId: id,
+          progress: data.progress,
+          status: data.status,
+          lastAccessed: data.lastAccessed,
+          completedAt: data.completedAt
+        }))
+      });
+
+      // 3. Получаем актуальный прогресс курса
+      const progressResponse = await coursesAPI.getStudentProgress(user._id, courseId);
+      
+      // Обновляем состояние с актуальными данными
+      setCourseProgress(progressResponse.totalProgress);
+      
+      // Обновляем прогресс уроков
+      const progressMap = {};
+      progressResponse.lessons.forEach(l => {
+        progressMap[l._id] = {
+          progress: l.progress,
+          status: l.status,
+          lastAccessed: l.lastAccessed,
+          completedAt: l.completedAt
+        };
+      });
+      setLessonsProgress(progressMap);
+
+      // 4. Если прогресс 100%, создаем сертификат
+      if (progressResponse.totalProgress === 100) {
+        try {
+          await certificatesAPI.create(courseId);
+        } catch (certError) {
+          console.error('Error creating certificate:', certError);
+          // Не показываем ошибку пользователю, так как это не критично
+        }
+      }
       
       // Проверяем наличие теста
       if (response.quiz && !response.quizCompleted) {
@@ -511,6 +571,41 @@ const LessonDetail = () => {
             }}
           />
         </Paper>
+
+        {/* Сообщение о завершении курса */}
+        {courseProgress === 100 && (
+          <Alert 
+            severity="success" 
+            sx={{ 
+              mb: 3,
+              borderRadius: 2,
+              '& .MuiAlert-message': {
+                fontSize: '1.1rem'
+              }
+            }}
+          >
+            <Typography variant="h6" sx={{ mb: 1 }}>
+              Поздравляем! 🎉
+            </Typography>
+            <Typography>
+              Вы успешно завершили курс "{course.title}"! Теперь вы можете{' '}
+              <Link 
+                component={RouterLink} 
+                to="/dashboard/certificates" 
+                sx={{ 
+                  color: 'inherit',
+                  textDecoration: 'underline',
+                  '&:hover': {
+                    color: 'primary.main'
+                  }
+                }}
+              >
+                получить сертификат о прохождении курса
+              </Link>
+              {' '}в личном кабинете в разделе сертификаты.
+            </Typography>
+          </Alert>
+        )}
 
         <Grid container spacing={3} alignItems="flex-start">
           {/* Навигация слева */}

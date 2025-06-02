@@ -70,6 +70,13 @@ try {
   app.use('/api/quizzes', quizzesRouter);
   console.log('Quizzes router подключен к /api/quizzes');
 
+  // Certificates router
+  console.log('Загрузка certificates router...');
+  const certificatesRouter = require('./routes/certificates');
+  console.log('Certificates router загружен успешно');
+  app.use('/api/certificates', certificatesRouter);
+  console.log('Certificates router подключен к /api/certificates');
+
 } catch (error) {
   console.error('Ошибка при загрузке маршрутов:', error);
   process.exit(1); // Завершаем процесс с ошибкой

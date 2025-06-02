@@ -127,6 +127,13 @@ export const coursesAPI = {
   }
 };
 
+export const certificatesAPI = {
+  create: (courseId) => api.post(`/certificates/${courseId}`),
+  getAll: () => api.get('/certificates'),
+  getById: (id) => api.get(`/certificates/${id}`),
+  download: (id) => api.get(`/certificates/${id}/download`, { responseType: 'blob' })
+};
+
 export const lessonsAPI = {
   getByCourse: (courseId) => api.get(`/lessons/course/${courseId}`),
   getById: (id) => api.get(`/lessons/${id}`),

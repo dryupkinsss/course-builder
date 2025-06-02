@@ -23,7 +23,8 @@ import {
   PlayArrow as PlayArrowIcon,
   Assignment as AssignmentIcon,
   Star as StarIcon,
-  Notifications as NotificationsIcon
+  Notifications as NotificationsIcon,
+  Message as MessageIcon
 } from '@mui/icons-material';
 import { coursesAPI } from '../../services/api';
 
@@ -37,9 +38,9 @@ const StudentDashboard = () => {
   const [stats, setStats] = useState({
     completedLessons: 0,
     totalLessons: 0,
-    averageScore: 0,
     certificates: 0
   });
+  const [completedCourses, setCompletedCourses] = useState(0);
 
   useEffect(() => {
     if (user) {
@@ -55,7 +56,7 @@ const StudentDashboard = () => {
       // Получаем прогресс для каждого курса
       const progressPromises = response.data.map(async (course) => {
         try {
-          const progress = await coursesAPI.getCourseProgress(course._id);
+          const progress = await coursesAPI.getCourseProgress(course._id, user._id);
           return { courseId: course._id, progress };
         } catch (err) {
           console.error(`Ошибка при получении прогресса для курса ${course._id}:`, err);
@@ -65,7 +66,9 @@ const StudentDashboard = () => {
 
       const progressResults = await Promise.all(progressPromises);
       const progressMap = progressResults.reduce((acc, { courseId, progress }) => {
-        acc[courseId] = progress;
+        if (progress) {
+          acc[courseId] = progress;
+        }
         return acc;
       }, {});
       setCoursesProgress(progressMap);
@@ -73,8 +76,7 @@ const StudentDashboard = () => {
       // Подсчет статистики
       let completedLessons = 0;
       let totalLessons = 0;
-      let totalScore = 0;
-      let scoreCount = 0;
+      let completedCoursesCount = 0;
 
       response.data.forEach(course => {
         const progress = user?.progress?.find(p => p.course.toString() === course._id.toString());
@@ -82,21 +84,19 @@ const StudentDashboard = () => {
           completedLessons += progress.completedLessons?.length || 0;
           totalLessons += course.lessons?.length || 0;
           
-          if (progress.quizScores) {
-            progress.quizScores.forEach(score => {
-              totalScore += score.score;
-              scoreCount++;
-            });
+          // Проверяем, завершен ли курс (прогресс 100%)
+          if (progress.totalProgress === 100) {
+            completedCoursesCount++;
           }
         } else {
           totalLessons += course.lessons?.length || 0;
         }
       });
 
+      setCompletedCourses(completedCoursesCount);
       setStats({
         completedLessons,
         totalLessons,
-        averageScore: scoreCount > 0 ? Math.round(totalScore / scoreCount) : 0,
         certificates: response.data.filter(course => {
           const progress = user?.progress?.find(p => p.course.toString() === course._id.toString());
           return progress && progress.completedLessons?.length === course.lessons?.length;
@@ -111,17 +111,20 @@ const StudentDashboard = () => {
   };
 
   const hasStartedCourse = (courseId) => {
-    const progress = coursesProgress[courseId];
+    const progress = user?.progress?.find(p => p.course.toString() === courseId.toString());
     if (!progress) return false;
-    return progress.lessons.some(lesson => lesson.progress > 0);
+    return progress.completedLessons?.length > 0 || progress.totalProgress > 0;
   };
 
   const getNextLessonId = (course) => {
-    const progress = coursesProgress[course._id];
-    if (!progress || !course.lessons) return course.lessons[0]?._id;
+    if (!course.lessons || course.lessons.length === 0) return null;
     
-    const incompleteLesson = progress.lessons.find(lesson => lesson.progress < 100);
-    return incompleteLesson?._id || course.lessons[0]?._id;
+    const progress = user?.progress?.find(p => p.course.toString() === course._id.toString());
+    if (!progress) return course.lessons[0]?._id;
+    
+    const completedLessons = progress.completedLessons || [];
+    const nextLesson = course.lessons.find(lesson => !completedLessons.includes(lesson._id));
+    return nextLesson?._id || course.lessons[0]?._id;
   };
 
   if (!user) {
@@ -156,31 +159,19 @@ const StudentDashboard = () => {
 
       {/* Статистика */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card>
             <CardContent>
               <Typography color="textSecondary" gutterBottom>
-                Пройдено уроков
+                Завершенные курсы
               </Typography>
               <Typography variant="h4">
-                {stats.completedLessons} / {stats.totalLessons}
+                {completedCourses} / {enrolledCourses.length}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Средний балл
-              </Typography>
-              <Typography variant="h4">
-                {stats.averageScore}%
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card>
             <CardContent>
               <Typography color="textSecondary" gutterBottom>
@@ -192,7 +183,7 @@ const StudentDashboard = () => {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card>
             <CardContent>
               <Typography color="textSecondary" gutterBottom>
@@ -222,16 +213,6 @@ const StudentDashboard = () => {
           <Button
             fullWidth
             variant="outlined"
-            startIcon={<AssignmentIcon />}
-            onClick={() => navigate('/assignments')}
-          >
-            Задания
-          </Button>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Button
-            fullWidth
-            variant="outlined"
             startIcon={<StarIcon />}
             onClick={() => navigate('/certificates')}
           >
@@ -242,10 +223,10 @@ const StudentDashboard = () => {
           <Button
             fullWidth
             variant="outlined"
-            startIcon={<NotificationsIcon />}
-            onClick={() => navigate('/notifications')}
+            startIcon={<MessageIcon />}
+            onClick={() => navigate('/messages')}
           >
-            Уведомления
+            Сообщения
           </Button>
         </Grid>
       </Grid>

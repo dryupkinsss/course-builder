@@ -22,6 +22,7 @@ import CourseEdit from './components/courses/CourseEdit';
 import Students from './components/students/Students';
 import Messages from './components/messages/Messages';
 import QuizComponent from './components/quiz/QuizComponent';
+import Certificates from './components/certificates/Certificates';
 
 // Создание темы
 const theme = createTheme({
@@ -73,6 +74,7 @@ function App() {
               <Route path="/students" element={<Students />} />
               <Route path="/messages" element={<Messages />} />
               <Route path="/quiz/:id" element={<QuizComponent />} />
+              <Route path="/certificates" element={<Certificates />} />
             </Routes>
           </div>
         </Router>

@@ -26,6 +26,7 @@ import {
 import { coursesAPI, messagesAPI } from '../../services/api';
 
 const Messages = () => {
+  const { user } = useSelector((state) => state.auth);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -34,11 +35,11 @@ const Messages = () => {
     subject: '',
     content: ''
   });
-  const [students, setStudents] = useState([]);
+  const [recipients, setRecipients] = useState([]);
 
   useEffect(() => {
     fetchMessages();
-    fetchStudents();
+    fetchRecipients();
   }, []);
 
   const fetchMessages = async () => {
@@ -52,22 +53,30 @@ const Messages = () => {
     }
   };
 
-  const fetchStudents = async () => {
+  const fetchRecipients = async () => {
     try {
-      const response = await coursesAPI.getTeacherCourses();
-      const allStudents = response.data.reduce((acc, course) => {
-        if (Array.isArray(course.enrolledStudents)) {
-          course.enrolledStudents.forEach(student => {
-            if (!acc.find(s => s._id === student._id)) {
-              acc.push(student);
-            }
-          });
-        }
-        return acc;
-      }, []);
-      setStudents(allStudents);
+      if (user?.role === 'student') {
+        const response = await coursesAPI.getEnrolledCourses();
+        const teachers = response.data
+          .map(course => course.instructor)
+          .filter((instructor, idx, arr) => instructor && arr.findIndex(i => i._id === instructor._id) === idx);
+        setRecipients(teachers);
+      } else {
+        const response = await coursesAPI.getTeacherCourses();
+        const allStudents = response.data.reduce((acc, course) => {
+          if (Array.isArray(course.enrolledStudents)) {
+            course.enrolledStudents.forEach(student => {
+              if (!acc.find(s => s._id === student._id)) {
+                acc.push(student);
+              }
+            });
+          }
+          return acc;
+        }, []);
+        setRecipients(allStudents);
+      }
     } catch (err) {
-      setError('Ошибка при загрузке списка студентов');
+      setError('Ошибка при загрузке списка получателей');
     }
   };
 
@@ -122,7 +131,7 @@ const Messages = () => {
               <TextField
                 select
                 fullWidth
-                label="Получатель"
+                label={user?.role === 'student' ? 'Получатель (преподаватель)' : 'Получатель (студент)'}
                 value={newMessage.recipient}
                 onChange={(e) => setNewMessage({ ...newMessage, recipient: e.target.value })}
                 margin="normal"
@@ -135,10 +144,10 @@ const Messages = () => {
                   sx: { backgroundColor: 'white', px: 1 }
                 }}
               >
-                <option value="">Выберите студента</option>
-                {students.map((student) => (
-                  <option key={student._id} value={student._id}>
-                    {student.name}
+                <option value="">Выберите {user?.role === 'student' ? 'преподавателя' : 'студента'}</option>
+                {recipients.map((person) => (
+                  <option key={person._id} value={person._id}>
+                    {person.name}
                   </option>
                 ))}
               </TextField>
@@ -161,9 +170,10 @@ const Messages = () => {
               <Button
                 type="submit"
                 variant="contained"
+                color="primary"
                 endIcon={<SendIcon />}
-                fullWidth
                 sx={{ mt: 2 }}
+                disabled={!newMessage.recipient || !newMessage.subject || !newMessage.content}
               >
                 Отправить
               </Button>
