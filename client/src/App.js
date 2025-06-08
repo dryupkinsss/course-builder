@@ -23,6 +23,10 @@ import Students from './components/students/Students';
 import Messages from './components/messages/Messages';
 import QuizComponent from './components/quiz/QuizComponent';
 import Certificates from './components/certificates/Certificates';
+import Footer from './components/layout/Footer';
+import TeacherCoursesList from './components/dashboard/TeacherCoursesList';
+import StudentCoursesList from './components/dashboard/StudentCoursesList';
+import About from './components/pages/About';
 
 // Создание темы
 const theme = createTheme({
@@ -71,11 +75,15 @@ function App() {
               <Route path="/courses/:courseId/lessons/create" element={<LessonCreate />} />
               <Route path="/courses/:courseId/lessons/:lessonId" element={<LessonDetail />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/dashboard/teacher" element={<TeacherCoursesList />} />
+              <Route path="/dashboard/courses" element={<StudentCoursesList />} />
               <Route path="/students" element={<Students />} />
               <Route path="/messages" element={<Messages />} />
               <Route path="/quiz/:id" element={<QuizComponent />} />
               <Route path="/certificates" element={<Certificates />} />
+              <Route path="/about" element={<About />} />
             </Routes>
+            <Footer />
           </div>
         </Router>
       </ThemeProvider>

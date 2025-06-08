@@ -95,6 +95,12 @@ courseSchema.methods.calculateTotalDuration = async function() {
     return this.totalDuration;
 };
 
+// Метод для подсчета дохода преподавателя
+courseSchema.methods.calculateTeacherIncome = function() {
+    const teacherShare = 0.4; // 40% от стоимости курса
+    return this.price * this.enrolledStudents.length * teacherShare;
+};
+
 // Предсохранный хук для подсчета общей длительности
 courseSchema.pre('save', async function(next) {
     await this.calculateTotalDuration();

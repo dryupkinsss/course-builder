@@ -13,7 +13,8 @@ import {
   Divider,
   CircularProgress,
   Alert,
-  Button
+  Button,
+  Grid
 } from '@mui/material';
 import {
   Download as DownloadIcon,
@@ -79,59 +80,60 @@ const Certificates = () => {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom>
-        Мои сертификаты
-      </Typography>
+      <Paper elevation={3} sx={{ p: 4, borderRadius: 4, boxShadow: 3, bgcolor: '#f5f7fa', mb: 4 }}>
+        <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
+          Мои сертификаты
+        </Typography>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
-      )}
+        {error && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {error}
+          </Alert>
+        )}
 
-      {certificates.length === 0 ? (
-        <Paper sx={{ p: 3, textAlign: 'center' }}>
-          <Typography variant="h6" color="textSecondary" gutterBottom>
-            У вас пока нет сертификатов
-          </Typography>
-          <Typography color="textSecondary">
-            Завершите курсы, чтобы получить сертификаты
-          </Typography>
-        </Paper>
-      ) : (
-        <List>
-          {certificates.map((certificate, index) => (
-            <React.Fragment key={certificate._id}>
-              <ListItem>
-                <ListItemText
-                  primary={certificate.course.title}
-                  secondary={
-                    <>
-                      <Typography component="span" variant="body2" color="textPrimary">
-                        Номер сертификата: {certificate.certificateNumber}
+        {certificates.length === 0 ? (
+          <Paper sx={{ p: 3, textAlign: 'center', borderRadius: 4, boxShadow: 2, bgcolor: '#fff' }}>
+            <Typography variant="h6" color="textSecondary" gutterBottom>
+              У вас пока нет сертификатов
+            </Typography>
+            <Typography color="textSecondary">
+              Завершите курсы, чтобы получить сертификаты
+            </Typography>
+          </Paper>
+        ) : (
+          <Grid container spacing={3}>
+            {certificates.map((certificate) => (
+              <Grid item xs={12} sm={6} md={4} key={certificate._id}>
+                <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 2, bgcolor: '#fff', display: 'flex', flexDirection: 'column', height: '100%' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <PdfIcon color="primary" sx={{ fontSize: 40, mr: 2 }} />
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                        {certificate.course.title}
                       </Typography>
-                      <br />
-                      <Typography component="span" variant="body2" color="textSecondary">
-                        Дата выдачи: {new Date(certificate.issueDate).toLocaleDateString()}
+                      <Typography variant="body2" color="text.secondary">
+                        Номер: {certificate.certificateNumber}
                       </Typography>
-                    </>
-                  }
-                />
-                <ListItemSecondaryAction>
-                  <IconButton
-                    edge="end"
-                    aria-label="download"
+                    </Box>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Дата выдачи: {new Date(certificate.issueDate).toLocaleDateString()}
+                  </Typography>
+                  <Box sx={{ flexGrow: 1 }} />
+                  <Button
+                    variant="contained"
+                    startIcon={<DownloadIcon />}
                     onClick={() => handleDownload(certificate._id)}
+                    sx={{ borderRadius: 3, fontWeight: 600, py: 1.2, boxShadow: 2, transition: 'box-shadow 0.3s', ':hover': { boxShadow: 4 } }}
                   >
-                    <DownloadIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
-              {index < certificates.length - 1 && <Divider />}
-            </React.Fragment>
-          ))}
-        </List>
-      )}
+                    Скачать PDF
+                  </Button>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        )}
+      </Paper>
     </Container>
   );
 };

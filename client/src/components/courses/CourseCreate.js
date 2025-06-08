@@ -25,6 +25,9 @@ import {
 } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { coursesAPI } from '../../services/api';
+import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
+import SaveAltIcon from '@mui/icons-material/SaveAlt';
+import LibraryAddCheckIcon from '@mui/icons-material/LibraryAddCheck';
 
 const categories = [
   'Программирование',
@@ -338,122 +341,188 @@ const CourseCreate = () => {
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <Paper sx={{ p: 4 }}>
-        <Typography variant="h4" gutterBottom>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'linear-gradient(135deg, #f8fafc 60%, #e0e7ff 100%)', py: 6 }}>
+      <Box sx={{ maxWidth: 800, mx: 'auto', px: { xs: 2, sm: 4 } }}>
+        {/* Breadcrumbs и возврат назад */}
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <Button
+            startIcon={<ArrowBackIosNewIcon fontSize="small" />}
+            onClick={() => navigate(-1)}
+            sx={{ color: '#7c3aed', fontWeight: 500, textTransform: 'none', px: 0, minWidth: 0 }}
+          >
+            Назад к курсам
+          </Button>
+        </Box>
+        <Typography variant="h3" sx={{ fontWeight: 800, mb: 1, letterSpacing: -1 }}>
           Создание нового курса
         </Typography>
-
+        <Typography variant="subtitle1" sx={{ color: 'text.secondary', mb: 4 }}>
+          Заполните информацию о вашем курсе
+        </Typography>
         {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {error}
-          </Alert>
+          <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>
         )}
-
         <form onSubmit={handleSubmit}>
-          <TextField
-            fullWidth
-            label="Название курса"
-            name="title"
-            value={formData.title}
-            onChange={handleChange}
-            margin="normal"
-            required
-          />
-
-          <TextField
-            fullWidth
-            label="Описание курса"
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            margin="normal"
-            required
-            multiline
-            rows={4}
-          />
-
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth margin="normal">
-                <InputLabel>Категория</InputLabel>
-                <Select
-                  name="category"
-                  value={formData.category}
-                  label="Категория"
-                  onChange={handleChange}
-                  required
-                >
-                  {categories.map(category => (
-                    <MenuItem key={category} value={category}>
-                      {category}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth margin="normal">
-                <InputLabel>Уровень сложности</InputLabel>
-                <Select
-                  name="level"
-                  value={formData.level}
-                  label="Уровень сложности"
-                  onChange={handleChange}
-                  required
-                >
-                  {levels.map(level => (
-                    <MenuItem key={level.value} value={level.value}>
-                      {level.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-          </Grid>
-
-          <TextField
-            fullWidth
-            label="Цена курса (₽)"
-            name="price"
-            type="number"
-            value={formData.price}
-            onChange={handleChange}
-            margin="normal"
-            required
-          />
-
-          <Box sx={{ mt: 2, mb: 3 }}>
-            <input
-              accept="image/*"
-              type="file"
-              id="thumbnail-upload"
-              onChange={handleFileChange}
-              style={{ display: 'none' }}
+          {/* Основная информация */}
+          <Paper sx={{ p: { xs: 2, sm: 4 }, mb: 4, borderRadius: 4, boxShadow: 2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+              Основная информация
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
+              Заполните ключевые сведения о курсе
+            </Typography>
+            <TextField
+              fullWidth
+              label="Название курса *"
+              name="title"
+              value={formData.title}
+              onChange={handleChange}
+              margin="normal"
+              required
+              placeholder="Введите название курса"
             />
-            <label htmlFor="thumbnail-upload">
-              <Button
-                variant="outlined"
-                component="span"
-                startIcon={<AddIcon />}
-              >
-                Загрузить обложку курса
-              </Button>
-            </label>
-            {formData.thumbnail && (
-              <Typography variant="body2" sx={{ mt: 1 }}>
-                Выбрано: {formData.thumbnail.name}
+            <TextField
+              fullWidth
+              label="Описание курса *"
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              margin="normal"
+              required
+              multiline
+              rows={4}
+              placeholder="Расскажите о вашем курсе подробнее"
+            />
+            <Box sx={{ my: 2 }}>
+              <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                Обложка курса
               </Typography>
-            )}
-          </Box>
-
-          <Typography variant="h6" gutterBottom>
-            Требования к курсу
-          </Typography>
-          <List>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Button
+                  variant="outlined"
+                  component="label"
+                  startIcon={<SaveAltIcon />}
+                  sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}
+                >
+                  Загрузить обложку
+                  <input type="file" accept="image/*" hidden onChange={handleFileChange} />
+                </Button>
+                {formData.thumbnail && (
+                  <Box sx={{ width: 80, height: 80, borderRadius: 2, overflow: 'hidden', boxShadow: 1 }}>
+                    <img
+                      src={typeof formData.thumbnail === 'string' ? formData.thumbnail : URL.createObjectURL(formData.thumbnail)}
+                      alt="Превью"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  </Box>
+                )}
+              </Box>
+            </Box>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth margin="normal">
+                  <InputLabel>Категория *</InputLabel>
+                  <Select
+                    name="category"
+                    value={formData.category}
+                    label="Категория *"
+                    onChange={handleChange}
+                    required
+                    displayEmpty
+                    renderValue={(selected) =>
+                      selected ? selected : <span style={{ color: '#888', fontWeight: 400 }}>Категория</span>
+                    }
+                  >
+                    <MenuItem value="" disabled>
+                      Категория
+                    </MenuItem>
+                    {categories.map(category => (
+                      <MenuItem key={category} value={category}>{category}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth margin="normal">
+                  <InputLabel>Уровень сложности *</InputLabel>
+                  <Select
+                    name="level"
+                    value={formData.level}
+                    label="Уровень сложности *"
+                    onChange={handleChange}
+                    required
+                    displayEmpty
+                    renderValue={(selected) =>
+                      selected ? levels.find(l => l.value === selected)?.label : <span style={{ color: '#888', fontWeight: 400 }}>Уровень сложности</span>
+                    }
+                  >
+                    <MenuItem value="" disabled>
+                      Уровень сложности
+                    </MenuItem>
+                    {levels.map(level => (
+                      <MenuItem key={level.value} value={level.value}>{level.label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
+            <TextField
+              fullWidth
+              label="Цена курса (₽) *"
+              name="price"
+              type="number"
+              value={formData.price}
+              onChange={handleChange}
+              margin="normal"
+              required
+              placeholder="Укажите стоимость или 0 для бесплатного"
+            />
+          </Paper>
+          {/* Чему научатся студенты */}
+          <Paper sx={{ p: { xs: 2, sm: 4 }, mb: 4, borderRadius: 4, boxShadow: 2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+              Чему научатся студенты
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
+              Введите результат обучения для студентов
+            </Typography>
+            {formData.learningObjectives.map((objective, index) => (
+              <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <TextField
+                  fullWidth
+                  value={objective}
+                  onChange={(e) => handleArrayChange(index, e.target.value, 'learningObjectives')}
+                  placeholder="Введите результат обучения"
+                  required
+                />
+                <IconButton
+                  edge="end"
+                  onClick={() => removeArrayItem(index, 'learningObjectives')}
+                  disabled={formData.learningObjectives.length === 1}
+                  sx={{ ml: 1 }}
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </Box>
+            ))}
+            <Button
+              startIcon={<AddIcon />}
+              onClick={() => addArrayItem('learningObjectives')}
+              sx={{ fontWeight: 600, textTransform: 'none', mb: 1 }}
+            >
+              Добавить результат обучения
+            </Button>
+          </Paper>
+          {/* Требования */}
+          <Paper sx={{ p: { xs: 2, sm: 4 }, mb: 4, borderRadius: 4, boxShadow: 2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+              Требования
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
+              Укажите, что потребуется для прохождения курса
+            </Typography>
             {formData.requirements.map((requirement, index) => (
-              <ListItem key={index}>
+              <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                 <TextField
                   fullWidth
                   value={requirement}
@@ -461,153 +530,151 @@ const CourseCreate = () => {
                   placeholder="Введите требование"
                   required
                 />
-                <ListItemSecondaryAction>
-                  <IconButton
-                    edge="end"
-                    onClick={() => removeArrayItem(index, 'requirements')}
-                    disabled={formData.requirements.length === 1}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
-          </List>
-          <Button
-            startIcon={<AddIcon />}
-            onClick={() => addArrayItem('requirements')}
-            sx={{ mb: 3 }}
-          >
-            Добавить требование
-          </Button>
-
-          <Typography variant="h6" gutterBottom>
-            Чему научатся студенты
-          </Typography>
-          <List>
-            {formData.learningObjectives.map((objective, index) => (
-              <ListItem key={index}>
-                <TextField
-                  fullWidth
-                  value={objective}
-                  onChange={(e) => handleArrayChange(index, e.target.value, 'learningObjectives')}
-                  placeholder="Введите цель обучения"
-                  required
-                />
-                <ListItemSecondaryAction>
-                  <IconButton
-                    edge="end"
-                    onClick={() => removeArrayItem(index, 'learningObjectives')}
-                    disabled={formData.learningObjectives.length === 1}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
-          </List>
-          <Button
-            startIcon={<AddIcon />}
-            onClick={() => addArrayItem('learningObjectives')}
-            sx={{ mb: 3 }}
-          >
-            Добавить цель обучения
-          </Button>
-
-          <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
-            Управление модулями
-          </Typography>
-          <Button variant="contained" onClick={handleAddModule} sx={{ mb: 2 }}>
-            Добавить модуль
-          </Button>
-          {modules.length === 0 && (
-            <Alert severity="info">Добавьте хотя бы один модуль</Alert>
-          )}
-          {modules.map((mod, idx) => (
-            <Paper key={idx} sx={{ mb: 2, p: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Typography variant="subtitle1">{mod.title}</Typography>
-                <Button color="error" onClick={() => handleRemoveModule(idx)}>Удалить модуль</Button>
+                <IconButton
+                  edge="end"
+                  onClick={() => removeArrayItem(index, 'requirements')}
+                  disabled={formData.requirements.length === 1}
+                  sx={{ ml: 1 }}
+                >
+                  <DeleteIcon />
+                </IconButton>
               </Box>
-              <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-                <Button variant="outlined" onClick={() => handleOpenLesson(idx)}>
-                  {mod.lesson ? 'Редактировать лекцию' : 'Добавить лекцию'}
-                </Button>
-                <Button variant="outlined" onClick={() => handleOpenQuiz(idx)}>
-                  {mod.quiz ? 'Редактировать тест' : 'Добавить тест'}
-                </Button>
-              </Box>
-              {mod.lesson && (
-                <Box sx={{ mt: 2, ml: 2 }}>
-                  <Typography variant="body2">Лекция: {mod.lesson.title}</Typography>
+            ))}
+            <Button
+              startIcon={<AddIcon />}
+              onClick={() => addArrayItem('requirements')}
+              sx={{ fontWeight: 600, textTransform: 'none', mb: 1 }}
+            >
+              Добавить требование
+            </Button>
+          </Paper>
+          {/* Модули курса */}
+          <Paper sx={{ p: { xs: 2, sm: 4 }, mb: 4, borderRadius: 4, boxShadow: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                Модули курса
+              </Typography>
+              <Button
+                startIcon={<AddIcon />}
+                variant="contained"
+                onClick={handleAddModule}
+                sx={{
+                  background: 'linear-gradient(90deg, #1976d2 60%, #7c3aed 100%)',
+                  color: '#fff',
+                  borderRadius: 2,
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  boxShadow: '0 2px 8px rgba(25, 118, 210, 0.10)',
+                  ':hover': { background: 'linear-gradient(90deg, #1565c0 60%, #6d28d9 100%)' }
+                }}
+              >
+                Добавить модуль
+              </Button>
+            </Box>
+            {modules.length === 0 && (
+              <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', py: 6 }}>
+                Модули еще не добавлены
+              </Typography>
+            )}
+            {modules.map((mod, idx) => (
+              <Paper key={idx} sx={{ mb: 2, p: 2, borderRadius: 2, boxShadow: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{mod.title}</Typography>
+                  <Button color="error" onClick={() => handleRemoveModule(idx)} sx={{ borderRadius: 2, textTransform: 'none' }}>Удалить</Button>
                 </Box>
-              )}
-              {mod.quiz && (
-                <Box sx={{ mt: 1, ml: 2 }}>
-                  <Typography variant="body2">Тест: {mod.quiz.title}</Typography>
+                <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+                  <Button variant="outlined" onClick={() => handleOpenLesson(idx)} sx={{ borderRadius: 2, textTransform: 'none' }}>
+                    {mod.lesson ? 'Редактировать лекцию' : 'Добавить лекцию'}
+                  </Button>
+                  <Button variant="outlined" onClick={() => handleOpenQuiz(idx)} sx={{ borderRadius: 2, textTransform: 'none' }}>
+                    {mod.quiz ? 'Редактировать тест' : 'Добавить тест'}
+                  </Button>
                 </Box>
-              )}
-            </Paper>
-          ))}
-
-          <Box sx={{ mt: 4, display: 'flex', gap: 2 }}>
+                {mod.lesson && (
+                  <Box sx={{ mt: 2, ml: 2 }}>
+                    <Typography variant="body2">Лекция: {mod.lesson.title}</Typography>
+                  </Box>
+                )}
+                {mod.quiz && (
+                  <Box sx={{ mt: 1, ml: 2 }}>
+                    <Typography variant="body2">Тест: {mod.quiz.title}</Typography>
+                  </Box>
+                )}
+              </Paper>
+            ))}
+          </Paper>
+          {/* Кнопки действий */}
+          <Box sx={{ mt: 6, display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+            <Button
+              variant="outlined"
+              size="large"
+              onClick={() => navigate(-1)}
+              sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
+            >
+              Сохранить черновик
+            </Button>
             <Button
               type="submit"
               variant="contained"
               size="large"
+              startIcon={<LibraryAddCheckIcon />}
               disabled={loading}
+              sx={{
+                background: 'linear-gradient(90deg, #7c3aed 60%, #1976d2 100%)',
+                color: '#fff',
+                borderRadius: 2,
+                fontWeight: 700,
+                textTransform: 'none',
+                boxShadow: '0 2px 8px rgba(25, 118, 210, 0.10)',
+                ':hover': { background: 'linear-gradient(90deg, #6d28d9 60%, #1565c0 100%)' }
+              }}
             >
               {loading ? <CircularProgress size={24} /> : 'Создать курс'}
             </Button>
-            <Button
-              variant="outlined"
-              size="large"
-              onClick={() => navigate('/dashboard')}
-            >
-              Отмена
-            </Button>
           </Box>
         </form>
-      </Paper>
-
+      </Box>
       {/* Диалоги для лекции и теста */}
       <Dialog open={lessonDialogOpen} onClose={() => setLessonDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Лекция</DialogTitle>
-        <DialogContent>
+        <DialogTitle sx={{ fontWeight: 700, fontSize: 28, pb: 0 }}>Добавить лекцию</DialogTitle>
+        <DialogContent sx={{ pt: 2, pb: 3 }}>
+          <Typography variant="subtitle1" sx={{ color: 'text.secondary', mb: 2 }}>
+            Заполните информацию о лекции
+          </Typography>
           <TextField
             fullWidth
-            label="Название урока"
+            label="Название урока *"
             name="title"
             value={currentLesson.title}
             onChange={handleLessonChange}
             margin="normal"
             required
+            placeholder="Введите название урока"
           />
-
           <TextField
             fullWidth
-            label="Описание урока"
+            label="Описание урока *"
             name="description"
             value={currentLesson.description}
             onChange={handleLessonChange}
             margin="normal"
             required
             multiline
-            rows={4}
+            rows={3}
+            placeholder="Кратко опишите содержание урока"
           />
-
           <TextField
             fullWidth
-            label="Длительность (в минутах)"
+            label="Длительность (в минутах) *"
             name="duration"
             type="number"
             value={currentLesson.duration}
             onChange={handleLessonChange}
             margin="normal"
             required
+            placeholder="Например, 45"
           />
-
-          <Box sx={{ mt: 2, mb: 3 }}>
+          <Box sx={{ my: 2 }}>
             <input
               accept="video/*"
               type="file"
@@ -620,6 +687,7 @@ const CourseCreate = () => {
                 variant="outlined"
                 component="span"
                 startIcon={<AddIcon />}
+                sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}
               >
                 Загрузить видео урока
               </Button>
@@ -630,80 +698,99 @@ const CourseCreate = () => {
               </Typography>
             )}
           </Box>
-
-          <Typography variant="subtitle1" gutterBottom>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, mt: 3, mb: 1 }}>
             Дополнительные ресурсы
           </Typography>
-          <List>
-            {currentLesson.resources.map((resource, index) => (
-              <ListItem key={index}>
-                <TextField
-                  fullWidth
-                  value={resource}
-                  onChange={(e) => handleLessonResourceChange(index, e.target.value)}
-                  placeholder="Ссылка на ресурс (например, GitHub, документация)"
-                  required
-                />
-                <ListItemSecondaryAction>
-                  <IconButton
-                    edge="end"
-                    onClick={() => removeLessonResource(index)}
-                    disabled={currentLesson.resources.length === 1}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
-          </List>
+          {currentLesson.resources.map((resource, index) => (
+            <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <TextField
+                fullWidth
+                value={resource}
+                onChange={(e) => handleLessonResourceChange(index, e.target.value)}
+                placeholder="Ссылка на ресурс (например, GitHub, документация)"
+                required
+              />
+              <IconButton
+                edge="end"
+                onClick={() => removeLessonResource(index)}
+                disabled={currentLesson.resources.length === 1}
+                sx={{ ml: 1 }}
+              >
+                <DeleteIcon />
+              </IconButton>
+            </Box>
+          ))}
           <Button
             startIcon={<AddIcon />}
             onClick={addLessonResource}
-            sx={{ mb: 3 }}
+            sx={{ fontWeight: 600, textTransform: 'none', mb: 1 }}
           >
             Добавить ресурс
           </Button>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setLessonDialogOpen(false)}>Отмена</Button>
-          <Button onClick={handleSaveLesson} variant="contained">Сохранить</Button>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={() => setLessonDialogOpen(false)} variant="outlined" sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}>
+            Отмена
+          </Button>
+          <Button onClick={handleSaveLesson} variant="contained" sx={{
+            background: 'linear-gradient(90deg, #7c3aed 60%, #1976d2 100%)',
+            color: '#fff',
+            borderRadius: 2,
+            fontWeight: 700,
+            textTransform: 'none',
+            boxShadow: '0 2px 8px rgba(25, 118, 210, 0.10)',
+            ':hover': { background: 'linear-gradient(90deg, #6d28d9 60%, #1565c0 100%)' }
+          }}>
+            Сохранить
+          </Button>
         </DialogActions>
       </Dialog>
       <Dialog open={quizDialogOpen} onClose={() => setQuizDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Тест</DialogTitle>
-        <DialogContent>
+        <DialogTitle sx={{ fontWeight: 700, fontSize: 28, pb: 0 }}>Добавить тест</DialogTitle>
+        <DialogContent sx={{ pt: 2, pb: 3 }}>
+          <Typography variant="subtitle1" sx={{ color: 'text.secondary', mb: 2 }}>
+            Заполните информацию о тесте и вопросы
+          </Typography>
           <TextField
-            label="Название теста"
+            label="Название теста *"
             value={currentQuiz.title}
             onChange={e => handleQuizChange('title', e.target.value)}
             fullWidth
-            sx={{ mb: 2 }}
+            margin="normal"
+            required
+            placeholder="Введите название теста"
           />
           {currentQuiz.questions.map((q, qIdx) => (
-            <Box key={qIdx} sx={{ mb: 2, pl: 2, borderLeft: '2px solid #eee' }}>
+            <Box key={qIdx} sx={{ mb: 3, p: 2, borderLeft: '3px solid #e0e7ff', bgcolor: '#f8fafc', borderRadius: 2 }}>
               <TextField
                 label={`Вопрос ${qIdx + 1}`}
                 value={q.question}
                 onChange={e => handleQuestionChange(qIdx, 'question', e.target.value)}
                 fullWidth
                 sx={{ mb: 1 }}
+                required
+                placeholder="Введите текст вопроса"
               />
-              {q.options.map((opt, optIdx) => (
-                <TextField
-                  key={optIdx}
-                  label={`Вариант ${optIdx + 1}`}
-                  value={typeof opt === 'object' ? opt.text : opt}
-                  onChange={e => handleOptionChange(qIdx, optIdx, e.target.value)}
-                  sx={{ mr: 1, mb: 1, width: '45%' }}
-                />
-              ))}
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+                {q.options.map((opt, optIdx) => (
+                  <TextField
+                    key={optIdx}
+                    label={`Вариант ${optIdx + 1}`}
+                    value={typeof opt === 'object' ? opt.text : opt}
+                    onChange={e => handleOptionChange(qIdx, optIdx, e.target.value)}
+                    sx={{ width: { xs: '100%', sm: '45%' }, mb: 1 }}
+                    required
+                    placeholder={`Вариант ${optIdx + 1}`}
+                  />
+                ))}
+              </Box>
               <TextField
                 select
                 label="Правильный вариант"
                 value={q.correctOption}
                 onChange={e => handleCorrectOptionChange(qIdx, Number(e.target.value))}
                 SelectProps={{ native: true }}
-                sx={{ width: 200 }}
+                sx={{ width: 220 }}
               >
                 {q.options.map((opt, idx) => (
                   <option key={idx} value={idx}>
@@ -713,14 +800,26 @@ const CourseCreate = () => {
               </TextField>
             </Box>
           ))}
-          <Button variant="outlined" onClick={handleAddQuestion} sx={{ mt: 1 }}>Добавить вопрос</Button>
+          <Button variant="outlined" onClick={handleAddQuestion} startIcon={<AddIcon />} sx={{ mt: 1, fontWeight: 600, textTransform: 'none' }}>Добавить вопрос</Button>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setQuizDialogOpen(false)}>Отмена</Button>
-          <Button onClick={handleSaveQuiz} variant="contained">Сохранить</Button>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={() => setQuizDialogOpen(false)} variant="outlined" sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}>
+            Отмена
+          </Button>
+          <Button onClick={handleSaveQuiz} variant="contained" sx={{
+            background: 'linear-gradient(90deg, #7c3aed 60%, #1976d2 100%)',
+            color: '#fff',
+            borderRadius: 2,
+            fontWeight: 700,
+            textTransform: 'none',
+            boxShadow: '0 2px 8px rgba(25, 118, 210, 0.10)',
+            ':hover': { background: 'linear-gradient(90deg, #6d28d9 60%, #1565c0 100%)' }
+          }}>
+            Сохранить
+          </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+    </Box>
   );
 };
 

@@ -591,7 +591,7 @@ const LessonDetail = () => {
               Вы успешно завершили курс "{course.title}"! Теперь вы можете{' '}
               <Link 
                 component={RouterLink} 
-                to="/dashboard/certificates" 
+                to="/certificates" 
                 sx={{ 
                   color: 'inherit',
                   textDecoration: 'underline',

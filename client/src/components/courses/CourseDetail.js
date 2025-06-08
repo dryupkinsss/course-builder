@@ -184,13 +184,9 @@ const CourseDetail = () => {
 
   // Добавляем функцию для проверки, является ли пользователь создателем курса
   const isCourseCreator = () => {
-    console.log('Checking if user is course creator:', {
-      isAuthenticated,
-      userId: user?._id,
-      courseInstructorId: course?.instructor,
-      isCreator: isAuthenticated && user && course && user._id === course.instructor
-    });
-    return isAuthenticated && user && course && user._id === course.instructor;
+    if (!isAuthenticated || !user || !course) return false;
+    const instructorId = typeof course.instructor === 'object' ? course.instructor._id : course.instructor;
+    return String(user._id) === String(instructorId);
   };
 
   if (loading) {
@@ -216,275 +212,285 @@ const CourseDetail = () => {
   }
 
   return (
-    <Container sx={{ py: 4, maxWidth: '1100px' }}>
-      {enrollmentSuccess && (
-        <Alert 
-          severity="success" 
-          sx={{ mb: 3 }}
-          action={
-            <Button 
-              color="inherit" 
-              size="small"
-              onClick={() => navigate('/dashboard')}
-            >
-              Перейти в личный кабинет
-            </Button>
-          }
-        >
-          Вы успешно записались на курс! Теперь вы можете начать обучение в личном кабинете.
-        </Alert>
-      )}
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
-      )}
-
-      <Grid container spacing={4}>
-        {/* Основная информация о курсе */}
-        <Grid item xs={12} md={8}>
-          <Card sx={{ overflow: 'hidden', bgcolor: '#fff', borderRadius: 4, boxShadow: 3 }}>
-            <Box
-              sx={{
-                position: 'relative',
-                width: '100%',
-                height: { xs: '220px', sm: '320px', md: '400px' },
-                bgcolor: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
+    <Box sx={{ minHeight: '100vh', bgcolor: 'linear-gradient(135deg, #f8fafc 60%, #e0e7ff 100%)', py: 6 }}>
+      <Box sx={{ maxWidth: '1440px', mx: 'auto', px: { xs: 2, sm: 4, md: 6 } }}>
+        <Typography variant="h4" gutterBottom sx={{ fontWeight: 700, mb: 4 }}>
+          {course.title}
+        </Typography>
+        {error && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {error}
+          </Alert>
+        )}
+        {enrollmentSuccess && (
+          <Alert severity="success" sx={{ mb: 3 }}>
+            Вы успешно записались на курс!
+          </Alert>
+        )}
+        <Box sx={{ display: 'flex', gap: 6, alignItems: 'flex-start', flexWrap: { xs: 'wrap', md: 'nowrap' } }}>
+          {/* Sidebar */}
+          <Box sx={{ width: 340, minWidth: 260, flexShrink: 0 }}>
+            {/* Картинка курса */}
+            <Box sx={{ mb: 3, borderRadius: 3, overflow: 'hidden', boxShadow: 2 }}>
               <CardMedia
                 component="img"
-                image={course.thumbnail ? `http://localhost:5000/${course.thumbnail.replace(/\\/g, '/')}` : 'https://source.unsplash.com/random?course'}
+                height="180"
+                image={course.thumbnail ? `http://localhost:5000/${course.thumbnail}` : 'https://source.unsplash.com/random?course'}
                 alt={course.title}
-                sx={{
-                  maxWidth: '100%',
-                  maxHeight: '100%',
-                  objectFit: 'contain',
-                  borderRadius: 2,
-                  boxShadow: 1,
-                  background: '#fff',
-                  transition: 'box-shadow 0.3s',
-                  ':hover': { boxShadow: 4 }
-                }}
+                sx={{ width: '100%', height: 180, objectFit: 'cover', borderTopLeftRadius: 12, borderTopRightRadius: 12 }}
               />
             </Box>
-            <CardContent sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
-              <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
-                {course.title}
+            <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 3, bgcolor: '#fff', mb: 4 }}>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                Информация о курсе
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <Rating value={course.rating} readOnly precision={0.5} />
-                <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                  ({course.rating})
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
-                  {course.reviews?.length || 0} отзывов
+                <Person sx={{ mr: 1 }} />
+                <Typography variant="body2">
+                  Преподаватель: {course.instructor?.name || 'Не указан'}
                 </Typography>
               </Box>
-              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                <Chip label={course.category} icon={<SchoolOutlinedIcon />} />
-                <Chip label={levelLabels[course.level] || course.level} icon={<MenuBookOutlinedIcon />} />
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <AccessTime sx={{ mr: 1 }} />
+                <Typography variant="body2">
+                  Длительность: {course.duration || 'Не указана'}
+                </Typography>
               </Box>
-              <Typography variant="body1" paragraph sx={{ color: 'text.secondary', mb: 2 }}>
-                {course.description}
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <School sx={{ mr: 1 }} />
+                <Typography variant="body2">
+                  Уровень: {levelLabels[course.level] || course.level}
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Star sx={{ mr: 1 }} />
+                <Typography variant="body2">
+                  Рейтинг: {course.rating}
+                </Typography>
+              </Box>
+              <Typography variant="h5" color="primary" sx={{ mt: 2, fontWeight: 700 }}>
+                {course.price === 0 ? 'Бесплатно' : `${course.price} ₽`}
               </Typography>
-              {course.requirements && course.requirements.length > 0 && (
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Требования:
-                  </Typography>
-                  <List dense>
-                    {course.requirements.map((req, idx) => (
-                      <ListItem key={idx} sx={{ pl: 0 }}>
-                        <ListItemText primary={req} />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Box>
-              )}
-              <Typography variant="h6" gutterBottom>
-                Чему вы научитесь:
-              </Typography>
-              <List dense>
-                {course.learningObjectives?.map((objective, index) => (
-                  <ListItem key={index} sx={{ pl: 0 }}>
-                    <ListItemText primary={objective} />
-                  </ListItem>
-                ))}
-              </List>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Боковая панель */}
-        <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 3, mb: 3, borderRadius: 4, boxShadow: 2, bgcolor: '#fafbfc' }}>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-              Стоимость курса
-            </Typography>
-            <Typography variant="h5" gutterBottom sx={{ fontWeight: 700, color: 'primary.main' }}>
-              {course.price === 0 ? 'Бесплатно' : `${course.price} ₽`}
-            </Typography>
-            {!isCourseCreator() && (
-              <>
-                {isEnrolled() ? (
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={handleStartLearning}
-                    disabled={!isEnrolled()}
-                  >
-                    {hasStartedCourse() ? 'Продолжить обучение' : 'Начать обучение'}
-                  </Button>
-                ) : (
-              <Button
-                variant="contained"
-                fullWidth
-                size="large"
-                onClick={handleEnroll}
-                sx={{ mb: 2, mt: 1, borderRadius: 2, fontWeight: 600, boxShadow: 1, transition: 'box-shadow 0.3s', ':hover': { boxShadow: 3 } }}
-              >
-                {isAuthenticated ? 'Записаться на курс' : 'Войти для записи'}
-              </Button>
-                )}
-              </>
-            )}
-            <List dense>
-              <ListItem>
-                <ListItemText
-                  primary={<span style={{ fontWeight: 500 }}>Длительность</span>}
-                  secondary={`${course.totalDuration} часов`}
-                />
-              </ListItem>
-              <ListItem>
-                <ListItemText
-                  primary={<span style={{ fontWeight: 500 }}>Уроков</span>}
-                  secondary={course.lessons?.length || 0}
-                />
-              </ListItem>
-              <ListItem>
-                <ListItemText
-                  primary={<span style={{ fontWeight: 500 }}>Студентов</span>}
-                  secondary={Array.isArray(course.enrolledStudents) ? course.enrolledStudents.length : 0}
-                />
-              </ListItem>
-            </List>
-          </Paper>
-
-          {/* Список уроков */}
-          <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 1, bgcolor: '#fafbfc' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                Содержание курса
-              </Typography>
-              {isAuthenticated && user?.role === 'teacher' && course?.instructor === user._id && (
+              {isEnrolled() ? (
                 <Button
                   variant="contained"
-                  startIcon={<Edit />}
-                  onClick={() => navigate(`/courses/${course._id}/edit`)}
-                  sx={{ borderRadius: 2, fontWeight: 600, minWidth: 0, px: 2 }}
+                  startIcon={<PlayArrow />}
+                  onClick={handleStartLearning}
+                  sx={{
+                    mt: 2,
+                    borderRadius: 3,
+                    fontWeight: 600,
+                    py: 1.2,
+                    boxShadow: 2,
+                    background: 'linear-gradient(90deg, #1976d2 60%, #7c3aed 100%)',
+                    color: '#fff',
+                    textTransform: 'none',
+                    fontSize: 16,
+                    letterSpacing: 0.2,
+                    transition: 'box-shadow 0.3s, background 0.2s',
+                    ':hover': { boxShadow: 4, background: 'linear-gradient(90deg, #1565c0 60%, #6d28d9 100%)' }
+                  }}
                 >
-                  Редактировать содержимое
+                  {hasStartedCourse() ? 'Продолжить обучение' : 'Начать обучение'}
                 </Button>
-              )}
-            </Box>
-            <List dense>
-              {Array.isArray(course?.lessons) ? (
-                course.lessons.map((lesson, index) => (
-                  <React.Fragment key={lesson?._id || index}>
-                    <ListItem sx={{ pl: 0 }}>
-                      <PlayArrow color="primary" sx={{ mr: 1 }} />
+              ) :
+                !isAuthenticated ? (
+                  <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    onClick={() => navigate('/login')}
+                    fullWidth
+                    sx={{
+                      mt: 2,
+                      borderRadius: 2,
+                      fontWeight: 500,
+                      py: 1,
+                      px: 2,
+                      minWidth: 0,
+                      boxShadow: '0 2px 8px rgba(25, 118, 210, 0.10)',
+                      textTransform: 'none',
+                      fontSize: 16,
+                      letterSpacing: 0.2,
+                      alignItems: 'center',
+                      gap: 1,
+                      transition: 'box-shadow 0.2s, background 0.2s',
+                      background: 'linear-gradient(90deg, #1976d2 60%, #7c3aed 100%)',
+                      color: '#fff',
+                      '& .MuiButton-startIcon': {
+                        mr: 1,
+                      },
+                    }}
+                  >
+                    Авторизоваться для записи на курс
+                  </Button>
+                ) : (
+                  <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    onClick={handleEnroll}
+                    sx={{
+                      mt: 2,
+                      borderRadius: 2,
+                      fontWeight: 500,
+                      py: 1,
+                      px: 2,
+                      minWidth: 0,
+                      boxShadow: '0 2px 8px rgba(25, 118, 210, 0.10)',
+                      textTransform: 'none',
+                      fontSize: 16,
+                      letterSpacing: 0.2,
+                      alignItems: 'center',
+                      gap: 1,
+                      transition: 'box-shadow 0.2s, background 0.2s',
+                      whiteSpace: 'nowrap',
+                      background: 'linear-gradient(90deg, #1976d2 60%, #7c3aed 100%)',
+                      color: '#fff',
+                      ':hover': {
+                        boxShadow: '0 4px 16px rgba(25, 118, 210, 0.18)',
+                        background: 'linear-gradient(90deg, #1565c0 60%, #6d28d9 100%)',
+                      },
+                      '& .MuiButton-startIcon': {
+                        mr: 1,
+                      },
+                    }}
+                  >
+                    Записаться на курс
+                  </Button>
+                )
+              }
+            </Paper>
+
+            {isEnrolled() && (
+              <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 3, bgcolor: '#fff' }}>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                  Ваш прогресс
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="body2">
+                    Завершено уроков: {courseProgress?.completedLessons?.length || 0} из {course.lessons.length}
+                  </Typography>
+                </Box>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  onClick={handleLeaveCourse}
+                  sx={{ borderRadius: 3, fontWeight: 600, py: 1.2 }}
+                >
+                  Покинуть курс
+                </Button>
+              </Paper>
+            )}
+          </Box>
+
+          {/* Main Content */}
+          <Box sx={{ flex: 1 }}>
+            <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 3, bgcolor: '#fff', mb: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                Описание курса
+              </Typography>
+              <Typography variant="body1" paragraph>
+                {course.description}
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+                <Chip label={course.category} size="small" />
+                <Chip label={levelLabels[course.level] || course.level} size="small" />
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <Rating value={course.rating} readOnly precision={0.5} />
+                <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                  {course.rating}
+                </Typography>
+              </Box>
+            </Paper>
+
+            <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 3, bgcolor: '#fff', mb: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                Уроки курса
+              </Typography>
+              <List>
+                {course.lessons.map((lesson, index) => (
+                  <React.Fragment key={lesson._id}>
+                    <ListItem
+                      button
+                      onClick={() => navigate(`/courses/${id}/lessons/${lesson._id}`)}
+                      sx={{ borderRadius: 3, mb: 1, boxShadow: 1, bgcolor: '#f5f7fa', transition: 'box-shadow 0.2s', ':hover': { boxShadow: 3, bgcolor: '#e3f2fd' } }}
+                    >
                       <ListItemText
-                        primary={<span style={{ fontWeight: 500 }}>{`${index + 1}. ${lesson?.title || 'Урок ' + (index + 1)}`}</span>}
-                        secondary={lesson?.duration ? `${lesson.duration} минут` : ''}
+                        primary={lesson.title}
+                        secondary={lesson.description}
                       />
                     </ListItem>
                     {index < course.lessons.length - 1 && <Divider />}
                   </React.Fragment>
-                ))
-              ) : (
-                <ListItem>
-                  <ListItemText primary="Уроки отсутствуют" />
-                </ListItem>
-              )}
-            </List>
-          </Paper>
-        </Grid>
+                ))}
+              </List>
+            </Paper>
 
-        {/* Отзывы */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: { xs: 2, sm: 3 }, borderRadius: 4, boxShadow: 1, bgcolor: '#fafbfc' }}>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-              Отзывы студентов
-            </Typography>
-            {isAuthenticated && !isCourseCreator() && (
-              <Box component="form" onSubmit={handleReviewSubmit} sx={{ mb: 3 }}>
-                <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 500 }}>
-                  Оставить отзыв
+            <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 3, bgcolor: '#fff' }}>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                Отзывы
+              </Typography>
+              {course.reviews && course.reviews.length > 0 ? (
+                <List>
+                  {course.reviews.map((review, index) => (
+                    <React.Fragment key={index}>
+                      <ListItem>
+                        <ListItemText
+                          primary={
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <Rating value={review.rating} readOnly precision={0.5} />
+                              <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                                {review.user?.name || 'Аноним'}
+                              </Typography>
+                            </Box>
+                          }
+                          secondary={review.comment}
+                        />
+                      </ListItem>
+                      {index < course.reviews.length - 1 && <Divider />}
+                    </React.Fragment>
+                  ))}
+                </List>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  Пока нет отзывов
                 </Typography>
-                <Box sx={{ mb: 2 }}>
+              )}
+              {/* Форма для отправки отзыва */}
+              {isEnrolled() && !isCourseCreator() && !(course.reviews || []).some(r => (r.user?._id || r.user) === user._id) && (
+                <Box component="form" onSubmit={handleReviewSubmit} sx={{ mt: 3 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                    Оставить отзыв о курсе
+                  </Typography>
                   <Rating
                     name="rating"
-                    value={Number(review.rating)}
-                    onChange={handleReviewChange}
+                    value={review.rating}
+                    onChange={(_, value) => setReview({ ...review, rating: value })}
+                    sx={{ mb: 2 }}
                   />
+                  <TextField
+                    name="comment"
+                    label="Комментарий"
+                    value={review.comment}
+                    onChange={handleReviewChange}
+                    multiline
+                    minRows={2}
+                    fullWidth
+                    sx={{ mb: 2 }}
+                  />
+                  {reviewError && (
+                    <Alert severity="error" sx={{ mb: 2 }}>{reviewError}</Alert>
+                  )}
+                  <Button type="submit" variant="contained" sx={{ fontWeight: 600 }}>
+                    Отправить отзыв
+                  </Button>
                 </Box>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={4}
-                  name="comment"
-                  label="Ваш отзыв"
-                  value={review.comment}
-                  onChange={handleReviewChange}
-                  sx={{ mb: 2 }}
-                />
-                {reviewError && (
-                  <Alert severity="error" sx={{ mb: 2 }}>
-                    {reviewError}
-                  </Alert>
-                )}
-                <Button type="submit" variant="contained" sx={{ borderRadius: 2, fontWeight: 600 }}>
-                  Отправить отзыв
-                </Button>
-              </Box>
-            )}
-            <List>
-              {course.reviews?.map((review) => (
-                <React.Fragment key={review._id}>
-                  <ListItem alignItems="flex-start" sx={{ pl: 0 }}>
-                    <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
-                      {review.user.name ? review.user.name[0].toUpperCase() : '?'}
-                    </Avatar>
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <Typography component="span" variant="subtitle1" sx={{ fontWeight: 600 }}>
-                            {review.user.name}
-                          </Typography>
-                          <Rating
-                            value={review.rating}
-                            readOnly
-                            size="small"
-                            sx={{ ml: 1 }}
-                          />
-                        </Box>
-                      }
-                      secondary={review.comment}
-                    />
-                  </ListItem>
-                  <Divider component="li" />
-                </React.Fragment>
-              ))}
-            </List>
-          </Paper>
-        </Grid>
-      </Grid>
-    </Container>
+              )}
+            </Paper>
+          </Box>
+        </Box>
+      </Box>
+    </Box>
   );
 };
 

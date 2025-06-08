@@ -12,7 +12,7 @@ const path = require('path');
 const User = require('../models/User');
 
 // Получение всех курсов
-router.get('/', auth, async (req, res) => {
+router.get('/', async (req, res) => {
     try {
         const { category, level, search } = req.query;
         let query = {};
@@ -62,7 +62,7 @@ router.get('/enrolled', auth, async (req, res) => {
 });
 
 // Получение курса по ID
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', async (req, res) => {
     try {
         console.log('Fetching course with ID:', req.params.id);
         const course = await Course.findById(req.params.id)
@@ -83,13 +83,13 @@ router.get('/:id', auth, async (req, res) => {
         }
 
         // Проверяем доступ
-        const userId = req.user._id;
-        const isInstructor = course.instructor._id.toString() === userId.toString();
-        const isEnrolled = course.enrolledStudents.includes(userId);
+        const userId = req.user ? req.user._id : null;
+        const isInstructor = userId && course.instructor._id.toString() === userId.toString();
+        const isEnrolled = userId && course.enrolledStudents.includes(userId);
         const isPublished = course.isPublished;
 
         console.log('Access check:', {
-            userIdStr: userId.toString(),
+            userIdStr: userId ? userId.toString() : 'not authenticated',
             enrolledIds: course.enrolledStudents.map(id => id.toString()),
             isEnrolled,
             isInstructor,
@@ -116,7 +116,7 @@ router.get('/:id', auth, async (req, res) => {
             })),
             quizzes: course.quizzes.map(quiz => ({
                 ...quiz.toObject(),
-            _id: quiz._id.toString(),
+                _id: quiz._id.toString(),
                 questions: quiz.questions.map(q => ({
                     ...q.toObject(),
                     _id: q._id.toString(),
@@ -783,7 +783,8 @@ router.get('/:courseId/progress/:studentId', auth, async (req, res) => {
     const userId = req.user._id;
 
     // Проверяем, что курс существует
-    const course = await Course.findById(courseId);
+    const course = await Course.findById(courseId)
+      .populate('quizzes');
     if (!course) {
       return res.status(404).json({ message: 'Курс не найден' });
     }
@@ -818,6 +819,29 @@ router.get('/:courseId/progress/:studentId', auth, async (req, res) => {
 
     const lessonsProgress = await Promise.all(progressPromises);
 
+    // Получаем прогресс по тестам
+    const quizProgressPromises = course.quizzes.map(async (quiz) => {
+      const progress = await Progress.findOne({
+        student: studentId,
+        course: courseId,
+        quiz: quiz._id
+      });
+
+      return {
+        _id: quiz._id,
+        title: quiz.title,
+        attempts: progress ? progress.quizAttempts : [],
+        lastAttempt: progress && progress.quizAttempts.length > 0 
+          ? progress.quizAttempts[progress.quizAttempts.length - 1] 
+          : null,
+        status: progress ? progress.status : 'not_started',
+        lastAccessed: progress ? progress.updatedAt : null,
+        completedAt: progress ? progress.completedAt : null
+      };
+    });
+
+    const quizzesProgress = await Promise.all(quizProgressPromises);
+
     // Вычисляем общий прогресс по курсу
     const totalProgress = lessonsProgress.reduce((acc, lesson) => acc + lesson.progress, 0) / lessons.length;
 
@@ -828,7 +852,8 @@ router.get('/:courseId/progress/:studentId', auth, async (req, res) => {
       },
       student: studentId,
       totalProgress: Math.round(totalProgress),
-      lessons: lessonsProgress
+      lessons: lessonsProgress,
+      quizzes: quizzesProgress
     });
   } catch (error) {
     console.error('Ошибка при получении прогресса:', error);
