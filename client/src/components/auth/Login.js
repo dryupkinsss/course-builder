@@ -43,7 +43,13 @@ const Login = () => {
 
     try {
       const response = await authAPI.login(formData);
-      dispatch(loginSuccess(response.data));
+      localStorage.setItem('token', response.data.token);
+      // Получаем полные данные пользователя
+      const userResponse = await authAPI.getCurrentUser();
+      dispatch(loginSuccess({
+        user: userResponse.data,
+        token: response.data.token
+      }));
       navigate('/dashboard');
     } catch (err) {
       dispatch(loginFailure(

@@ -19,7 +19,11 @@ import {
   CircularProgress,
   Chip,
   LinearProgress,
-  Link
+  Link,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import {
   PlayArrow as PlayIcon,
@@ -56,6 +60,7 @@ const LessonDetail = () => {
   const [showQuiz, setShowQuiz] = useState(false);
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [quizzesProgress, setQuizzesProgress] = useState({});
+  const [showCongrats, setShowCongrats] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -222,10 +227,11 @@ const LessonDetail = () => {
       });
       setLessonsProgress(progressMap);
 
-      // 4. Если прогресс 100%, создаем сертификат
+      // 4. Если прогресс 100%, создаем сертификат и показываем поздравление
       if (progressResponse.totalProgress === 100) {
         try {
           await certificatesAPI.create(courseId);
+          setShowCongrats(true);
         } catch (certError) {
           console.error('Error creating certificate:', certError);
           // Не показываем ошибку пользователю, так как это не критично
@@ -458,574 +464,201 @@ const LessonDetail = () => {
     }
   };
 
-  const renderContent = () => {
-    console.log('Rendering content with state:', {
-      loading,
-      error,
-      course,
-      lesson,
-      currentLessonIndex
-    });
+  const renderSidebar = () => (
+    <Paper elevation={2} sx={{ width: 280, minWidth: 200, maxWidth: 320, height: '100vh', borderRadius: 0, bgcolor: '#fff', borderRight: '1px solid #e0e7ff', display: { xs: 'none', md: 'block' }, position: 'sticky', top: 0 }}>
+      <Box sx={{ p: 3, borderBottom: '1px solid #e0e7ff' }}>
+        <Typography variant="h6" sx={{ fontWeight: 800, color: '#18181b', letterSpacing: -1 }}>Содержание курса</Typography>
+        </Box>
+      <List sx={{ p: 0 }}>
+        {renderLessonsList()}
+      </List>
+    </Paper>
+  );
 
-    if (loading) {
+  const renderProgressCard = () => (
+    <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 2, bgcolor: '#fff', mb: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+        <Typography variant="h6" sx={{ fontWeight: 700, color: '#18181b' }}>{course.title || 'Курс'}</Typography>
+        <Chip label={`${Object.values(lessonsProgress).filter(l => l.status === 'completed').length}/${course.lessons.length} уроков`} sx={{ bgcolor: '#e0e7ff', color: '#1976d2', fontWeight: 700 }} />
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Typography variant="body2" sx={{ color: '#7c3aed', fontWeight: 600 }}>Прогресс курса</Typography>
+        <Box sx={{ flex: 1 }}>
+          <LinearProgress variant="determinate" value={courseProgress} sx={{ height: 8, borderRadius: 4, bgcolor: '#e0e7ff', '& .MuiLinearProgress-bar': { borderRadius: 4, background: 'linear-gradient(90deg, #1976d2 60%, #7c3aed 100%)' } }} />
+        </Box>
+        <Typography variant="body2" sx={{ color: '#7c3aed', fontWeight: 700, minWidth: 40 }}>{courseProgress}%</Typography>
+      </Box>
+    </Paper>
+      );
+
+  const renderLessonCard = () => {
+    if (!lesson) {
       return (
-        <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
-          <CircularProgress />
+        <Box sx={{ p: 3 }}>
+          <Alert severity="warning">Данные урока не загружены</Alert>
         </Box>
       );
     }
-
-    if (error) {
-      return (
-        <Box p={3}>
-          <Alert severity="error">{error}</Alert>
-        </Box>
-      );
-    }
-
-    if (!lesson?.title) {
-      console.log('Lesson data is missing or invalid:', lesson);
-      return (
-        <Box p={3}>
-          <Alert severity="warning">Урок не найден</Alert>
-        </Box>
-      );
-    }
-
-    const isTeacher = isAuthenticated && user?.role === 'teacher';
-    const isStudent = isAuthenticated && user?.role === 'student';
     const hasNextLesson = currentLessonIndex < (course?.lessons?.length || 0) - 1;
     const hasPrevLesson = currentLessonIndex > 0;
-
     return (
-      <Container maxWidth="xl" sx={{ py: 4 }}>
-        {/* Заголовок */}
-        <Box sx={{ 
-          mb: 4, 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: 2,
-          height: '64px'
-        }}>
-          <IconButton onClick={() => navigate(`/courses/${courseId}`)}>
-            <ArrowBackIcon />
-          </IconButton>
-          <Typography 
-            variant="h4" 
-            sx={{ 
-              fontWeight: 600,
-              fontSize: { xs: '1.5rem', sm: '2rem' },
-              lineHeight: 1.2,
-              flex: 1,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            {lesson.title}
+      <Paper sx={{ flex: 2.5, minWidth: 750, maxWidth: 750, p: 3, borderRadius: 4, boxShadow: 2, bgcolor: '#fff', mb: { xs: 2, md: 0 } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+          <Typography variant="h5" sx={{ fontWeight: 800, color: '#18181b', letterSpacing: -1, display: 'flex', alignItems: 'center', gap: 1 }}>
+            {lesson.type === 'test' ? '📝' : '📹'} {lesson.title}
           </Typography>
-          {isTeacher && (
-            <Button
-              variant="outlined"
-              startIcon={<EditIcon />}
-              onClick={() => navigate(`/courses/${courseId}/lessons/${lessonId}/edit`)}
-              sx={{ 
-                ml: 'auto',
-                minWidth: '160px',
-                height: '40px'
-              }}
-            >
-              Редактировать
-            </Button>
-          )}
+          {isCompleted && <Chip label="Пройдено" sx={{ bgcolor: '#4ade80', color: '#fff', fontWeight: 700 }} icon={<CheckIcon sx={{ color: '#fff' }} />} />}
         </Box>
-
-        {/* Прогресс курса */}
-        <Paper sx={{ 
-          p: 2, 
-          mb: 3, 
-          borderRadius: 2,
-          height: '80px',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center'
-        }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 500, mr: 2, minWidth: '120px' }}>
-              Прогресс курса
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ minWidth: '40px' }}>
-              {courseProgress}%
+        <Typography variant="body2" sx={{ color: '#888', mb: 2 }}>Продолжительность: {lesson.duration || '—'} мин</Typography>
+        {lesson.type !== 'test' && lesson.video ? (
+          <Box sx={{ position: 'relative', paddingTop: '56.25%', background: 'linear-gradient(90deg, #e0e7ff 60%, #f8fafc 100%)', borderRadius: 3, overflow: 'hidden', boxShadow: 1, mb: 2 }}>
+            <video controls style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: 3 }} src={getVideoUrl(lesson.video)} />
+          </Box>
+        ) : (
+          <Box sx={{ p: 3, textAlign: 'center', minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#f8fafc', borderRadius: 2 }}>
+            <Typography variant="body1" sx={{ color: '#7c3aed', fontWeight: 600 }}>
+              {lesson.type === 'test' ? 'Тест по материалу урока' : 'Видео для этого урока отсутствует'}
             </Typography>
           </Box>
-          <LinearProgress 
-            variant="determinate" 
-            value={courseProgress} 
-            sx={{ 
-              height: 8, 
-              borderRadius: 4,
-              backgroundColor: 'rgba(0, 0, 0, 0.08)',
-              '& .MuiLinearProgress-bar': {
-                borderRadius: 4,
-              }
-            }}
-          />
-        </Paper>
-
-        {/* Сообщение о завершении курса */}
-        {courseProgress === 100 && (
-          <Alert 
-            severity="success" 
-            sx={{ 
-              mb: 3,
-              borderRadius: 2,
-              '& .MuiAlert-message': {
-                fontSize: '1.1rem'
-              }
-            }}
-          >
-            <Typography variant="h6" sx={{ mb: 1 }}>
-              Поздравляем! 🎉
-            </Typography>
-            <Typography>
-              Вы успешно завершили курс "{course.title}"! Теперь вы можете{' '}
-              <Link 
-                component={RouterLink} 
-                to="/certificates" 
-                sx={{ 
-                  color: 'inherit',
-                  textDecoration: 'underline',
-                  '&:hover': {
-                    color: 'primary.main'
-                  }
-                }}
-              >
-                получить сертификат о прохождении курса
-              </Link>
-              {' '}в личном кабинете в разделе сертификаты.
-            </Typography>
-          </Alert>
         )}
-
-        <Grid container spacing={3} alignItems="flex-start">
-          {/* Навигация слева */}
-          <Grid item xs={12} md={3}>
-            <Paper 
-              sx={{ 
-                p: 2, 
-                height: 'calc(100vh - 200px)', 
-                position: 'sticky',
-                top: 20,
-                overflow: 'auto',
-                borderRadius: 2,
-                boxShadow: 2,
-                minWidth: '240px',
-                maxWidth: '320px',
-                width: '100%',
-                '& .MuiListItem-root': {
-                  minHeight: '48px',
-                  px: 1
-                }
-              }}
-            >
-              <Typography 
-                variant="h6" 
-                gutterBottom 
-                sx={{ 
-                  fontWeight: 600, 
-                  px: 1,
-                  height: '40px',
-                  display: 'flex',
-                  alignItems: 'center'
-                }}
-              >
-                Навигация
-              </Typography>
-              <List sx={{ p: 0 }}>
-                {renderLessonsList()}
-              </List>
-            </Paper>
-          </Grid>
-
-          {/* Основной контент по центру */}
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ 
-              p: 2, 
-              mb: 3, 
-              borderRadius: 2, 
-              boxShadow: 2,
-              minHeight: '500px',
-              height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'flex-start'
-            }}>
-              {lesson.video ? (
-                <Box sx={{ 
-                  position: 'relative', 
-                  paddingTop: '56.25%',
-                  backgroundColor: '#000',
-                  borderRadius: '8px',
-                  overflow: 'hidden'
-                }}>
-                  <video
-                    controls
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: '100%',
-                      borderRadius: '8px'
-                    }}
-                    src={getVideoUrl(lesson.video)}
-                  />
-                </Box>
-              ) : (
-                <Box sx={{ 
-                  p: 3, 
-                  textAlign: 'center',
-                  height: '300px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <Alert severity="info" sx={{ width: '100%' }}>
-                    Видео для этого урока отсутствует
-                  </Alert>
-                </Box>
+        {/* Кнопки навигации */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, mt: 2 }}>
+          <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigateToLesson(currentLessonIndex - 1)} disabled={!hasPrevLesson} sx={{ borderRadius: 2, minWidth: '140px', height: '38px', fontWeight: 600, fontSize: '0.8125rem', color: '#1976d2', borderColor: '#1976d2', background: '#f3f4f6', ':hover': { background: '#e0e7ff' } }}>Предыдущий урок</Button>
+          {!isCompleted && (
+            <Button variant="contained" onClick={handleComplete} sx={{ borderRadius: 2, minWidth: '180px', height: '38px', fontWeight: 600, fontSize: '0.8125rem', background: 'linear-gradient(90deg, #1976d2 60%, #7c3aed 100%)', color: '#fff', boxShadow: 1, ':hover': { background: 'linear-gradient(90deg, #1565c0 60%, #6d28d9 100%)' } }} startIcon={<CheckIcon />}>Отметить как пройденный</Button>
               )}
-            </Paper>
-
-            {/* Кнопки навигации по урокам */}
-            <Box sx={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              mb: 3,
-              gap: 2
-            }}>
-              <Button
-                variant="outlined"
-                startIcon={<ArrowBackIcon />}
-                onClick={() => navigateToLesson(currentLessonIndex - 1)}
-                disabled={!hasPrevLesson}
-                sx={{ 
-                  borderRadius: 2,
-                  minWidth: '160px',
-                  height: '40px'
-                }}
-              >
-                Предыдущий урок
-              </Button>
-              {isStudent && !isCompleted && (
-                <Button
-                  variant="contained"
-                  color="primary"
-                  onClick={handleComplete}
-                  sx={{ 
-                    borderRadius: 2,
-                    minWidth: '200px',
-                    height: '40px'
-                  }}
-                >
-                  Отметить как пройденный
-                </Button>
-              )}
-              <Button
-                variant="outlined"
-                endIcon={<ArrowForwardIcon />}
-                onClick={() => navigateToLesson(currentLessonIndex + 1)}
-                disabled={!hasNextLesson}
-                sx={{ 
-                  borderRadius: 2,
-                  minWidth: '160px',
-                  height: '40px'
-                }}
-              >
-                Следующий урок
-              </Button>
-            </Box>
-          </Grid>
-
-          {/* Правая колонка с описанием и ресурсами */}
-          <Grid item xs={12} md={3} sx={{ alignSelf: 'flex-start' }}>
-            <Box sx={{ width: 340, maxWidth: '100%', display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <Paper sx={{ 
-                p: 2, 
-                borderRadius: 2, 
-                boxShadow: 2,
-                minHeight: '200px',
-                maxHeight: '220px',
-                height: '220px',
-                width: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                overflow: 'hidden'
-              }}>
-                <Typography 
-                  variant="h6" 
-                  gutterBottom 
-                  sx={{ 
-                    fontWeight: 600,
-                    height: '40px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    flexShrink: 0
-                  }}
-                >
-                  Описание урока
-                </Typography>
-                <Box sx={{
-                  flex: 1,
-                  minHeight: '60px',
-                  maxHeight: '100px',
-                  overflow: 'auto',
-                  mb: 2
-                }}>
-                  <Typography 
-                    variant="body1" 
-                    paragraph
-                    sx={{
-                      overflowWrap: 'break-word',
-                      wordBreak: 'break-word',
-                      whiteSpace: 'pre-line',
-                      m: 0,
-                      width: '100%'
-                    }}
-                  >
-                    {lesson.description || 'Описание отсутствует'}
-                  </Typography>
-                </Box>
-                <Box sx={{ 
-                  display: 'flex', 
-                  gap: 1, 
-                  flexWrap: 'wrap',
-                  mt: 'auto',
-                  flexShrink: 0
-                }}>
-                  <Chip
-                    icon={<PlayIcon />}
-                    label={`${lesson.duration || 0} минут`}
-                    variant="outlined"
-                    sx={{ borderRadius: 1 }}
-                  />
-                  {isCompleted && (
-                    <Chip
-                      icon={<CheckIcon />}
-                      label="Пройден"
-                      color="success"
-                      sx={{ borderRadius: 1 }}
-                    />
-                  )}
+          <Button variant="outlined" endIcon={<ArrowForwardIcon />} onClick={() => navigateToLesson(currentLessonIndex + 1)} disabled={!hasNextLesson} sx={{ borderRadius: 2, minWidth: '140px', height: '38px', fontWeight: 600, fontSize: '0.8125rem', color: '#1976d2', borderColor: '#1976d2', background: '#f3f4f6', ':hover': { background: '#e0e7ff' } }}>Следующий урок</Button>
                 </Box>
               </Paper>
-
-              {Array.isArray(lesson.resources) && lesson.resources.length > 0 && (
-                <Paper sx={{ 
-                  p: 2, 
-                  borderRadius: 2, 
-                  boxShadow: 2,
-                  minHeight: '200px',
-                  maxHeight: '220px',
-                  height: '220px',
-                  width: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  overflow: 'hidden'
-                }}>
-                  <Typography 
-                    variant="h6" 
-                    gutterBottom 
-                    sx={{ 
-                      fontWeight: 600,
-                      height: '40px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      flexShrink: 0
-                    }}
-                  >
-                    Дополнительные ресурсы
-                  </Typography>
-                  <Box sx={{ flex: 1, overflow: 'auto', minHeight: '60px', maxHeight: '140px' }}>
-                    <List>
-                      {lesson.resources.map((resource, index) => (
-                        <ListItem 
-                          key={index}
-                          sx={{ 
-                            p: 1,
-                            minHeight: '48px',
-                            '&:hover': {
-                              backgroundColor: 'rgba(0, 0, 0, 0.04)',
-                              borderRadius: 1
-                            }
-                          }}
-                        >
-                          <ListItemIcon sx={{ minWidth: '40px' }}>
-                            <LinkIcon color="primary" />
-                          </ListItemIcon>
-                          <ListItemText
-                            primary={
-                              <Typography
-                                sx={{
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                  maxWidth: '90px',
-                                  fontSize: '0.95rem'
-                                }}
-                              >
-                                {resource}
-                              </Typography>
-                            }
-                            secondary="Ссылка на ресурс"
-                          />
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            href={resource}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            sx={{ 
-                              borderRadius: 1,
-                              minWidth: '100px',
-                              height: '32px'
-                            }}
-                          >
-                            Открыть
-                          </Button>
-                        </ListItem>
-                      ))}
-                    </List>
-                  </Box>
-                </Paper>
-              )}
-            </Box>
-          </Grid>
-        </Grid>
-
-        {/* Комментарии */}
-        {Array.isArray(lesson.comments) && lesson.comments.length > 0 && (
-          <Paper sx={{ 
-            p: 3, 
-            mt: 4, 
-            borderRadius: 2, 
-            boxShadow: 2,
-            minHeight: '200px'
-          }}>
-            <Typography 
-              variant="h6" 
-              gutterBottom 
-              sx={{ 
-                fontWeight: 600,
-                height: '40px',
-                display: 'flex',
-                alignItems: 'center'
-              }}
-            >
-              Комментарии
-            </Typography>
-            <List>
-              {lesson.comments.map((comment, index) => (
-                <React.Fragment key={index}>
-                  <ListItem 
-                    alignItems="flex-start" 
-                    sx={{ 
-                      px: 0,
-                      minHeight: '80px'
-                    }}
-                  >
-                    <ListItemIcon sx={{ minWidth: '40px' }}>
-                      <CommentIcon color="primary" />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Box sx={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: 1,
-                          minHeight: '24px'
-                        }}>
-                          <Typography 
-                            component="span" 
-                            variant="subtitle2" 
-                            sx={{ fontWeight: 600 }}
-                          >
-                            {comment.user}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {comment.date}
-                          </Typography>
-                        </Box>
-                      }
-                      secondary={
-                        <Typography
-                          component="span"
-                          variant="body2"
-                          color="text.primary"
-                          sx={{ 
-                            display: 'block', 
-                            mt: 0.5,
-                            minHeight: '40px'
-                          }}
-                        >
-                          {comment.text}
-                        </Typography>
-                      }
-                    />
-                  </ListItem>
-                  {index < lesson.comments.length - 1 && <Divider />}
-                </React.Fragment>
-              ))}
-            </List>
-            <Box 
-              component="form" 
-              onSubmit={handleCommentSubmit} 
-              sx={{ 
-                mt: 2,
-                minHeight: '120px'
-              }}
-            >
-              <TextField
-                fullWidth
-                multiline
-                rows={2}
-                placeholder="Оставьте комментарий..."
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                sx={{ mb: 1 }}
-              />
-              <Button
-                type="submit"
-                variant="contained"
-                endIcon={<SendIcon />}
-                disabled={!comment.trim()}
-                sx={{ 
-                  borderRadius: 2,
-                  minWidth: '160px',
-                  height: '40px'
-                }}
-              >
-                Отправить
-              </Button>
-            </Box>
-          </Paper>
-        )}
-
-        {/* Тест */}
-        {showQuiz && !quizCompleted && lesson?.quiz && (
-          <Box mt={4}>
-            <QuizComponent
-              id={lesson.quiz._id}
-              onComplete={handleQuizComplete}
-            />
-          </Box>
-        )}
-      </Container>
     );
   };
 
-  return renderContent();
+  // Основной рендер
+  return (
+    <Box sx={{ minHeight: '100vh', bgcolor: 'linear-gradient(135deg, #f8fafc 60%, #e0e7ff 100%)', p: { xs: 1, md: 4 } }}>
+      {/* Sidebar + контент */}
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: 'flex-start', gap: 2, maxWidth: 1400, ml: { xs: 0, md: 2 } }}>
+        {/* Sidebar */}
+        {renderSidebar()}
+        {/* Контент */}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          {/* ProgressCard — широкий, почти на всю страницу */}
+          <Box sx={{ maxWidth: 1200, mb: 3 }}>{renderProgressCard()}</Box>
+          {/* Grid: слева видео, справа описание/ресурсы */}
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, maxWidth: 1200 }}>
+            {/* Видео и кнопки */}
+            <Box sx={{ flex: 2.5, minWidth: 350, maxWidth: 900, mb: { xs: 2, md: 0 } }}>{renderLessonCard()}</Box>
+            {/* Описание и ресурсы */}
+            <Paper sx={{ flex: 1, minWidth: 220, maxWidth: 340, p: 3, borderRadius: 3, boxShadow: 1, bgcolor: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {/* Описание урока */}
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: '#18181b', mb: 1 }}>Описание урока</Typography>
+                <Typography variant="body1" sx={{ color: '#18181b', mb: 2, whiteSpace: 'pre-line' }}>{lesson?.description || 'Описание отсутствует'}</Typography>
+              </Box>
+              <Divider sx={{ my: 1, bgcolor: '#e0e7ff' }} />
+              {/* Дополнительные ресурсы */}
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: '#18181b', mb: 1 }}>Дополнительные ресурсы</Typography>
+                {(() => {
+                  const resources = Array.isArray(lesson?.resources)
+                    ? lesson.resources.map(r => typeof r === 'string' ? { url: r, title: r } : r)
+                    : [];
+                  return resources.length > 0 ? (
+                    <List>
+                      {resources.map((resource, index) => (
+                        <ListItem key={index} alignItems="flex-start" sx={{ p: 1, minHeight: '44px', borderRadius: 2, mb: 1, bgcolor: '#fff', boxShadow: 0, '&:hover': { backgroundColor: '#e0e7ff' } }}>
+                          <ListItemIcon sx={{ mt: 0.5 }}><AttachFileIcon color="primary" /></ListItemIcon>
+                          <ListItemText
+                            primary={
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Link
+                                  href={resource.url}
+                                  target="_blank"
+                                  rel="noopener"
+                                  sx={{
+                                    color: '#1976d2',
+                                    fontWeight: 600,
+                                    flex: 1,
+                                    minWidth: 0,
+                                    overflowWrap: 'anywhere'
+                                  }}
+                                >
+                                  {resource.title || resource.url}
+                                </Link>
+                                {resource.url && (
+                                  <Button
+                                    href={resource.url}
+                                    target="_blank"
+                                    rel="noopener"
+                                    size="small"
+                                    variant="outlined"
+                                sx={{
+                                      borderRadius: 2,
+                                      fontWeight: 600,
+                                      color: '#1976d2',
+                                      borderColor: '#1976d2',
+                                  whiteSpace: 'nowrap',
+                                      ml: 1
+                                }}
+                              >
+                                    Перейти
+                                  </Button>
+                                )}
+                              </Box>
+                            }
+                            secondary={resource.description}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  ) : (
+                    <Typography variant="body2" sx={{ color: '#888', p: 1 }}>Нет дополнительных ресурсов</Typography>
+                  );
+                })()}
+                  </Box>
+                </Paper>
+          </Box>
+        </Box>
+            </Box>
+      
+      {/* Модальное окно с поздравлением */}
+      <Dialog
+        open={showCongrats}
+        onClose={() => setShowCongrats(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ textAlign: 'center', fontWeight: 700, color: '#1976d2' }}>
+          Поздравляем! 🎉
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ textAlign: 'center', py: 2 }}>
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+              Вы успешно завершили курс "{course.title}"
+            </Typography>
+            <Typography variant="body1" sx={{ mb: 3, color: '#666' }}>
+              Ваш сертификат будет доступен в личном кабинете. Продолжайте развиваться и осваивать новые навыки!
+                          </Typography>
+                        </Box>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center', pb: 3 }}>
+              <Button
+                variant="contained"
+            onClick={() => setShowCongrats(false)}
+                sx={{ 
+                  borderRadius: 2,
+              fontWeight: 600,
+              background: 'linear-gradient(90deg, #1976d2 60%, #7c3aed 100%)',
+              color: '#fff',
+              px: 4
+                }}
+              >
+            Отлично!
+              </Button>
+        </DialogActions>
+      </Dialog>
+          </Box>
+    );
 };
 
 export default LessonDetail; 

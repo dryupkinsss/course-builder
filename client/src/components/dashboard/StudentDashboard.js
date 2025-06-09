@@ -27,11 +27,11 @@ import {
   Notifications as NotificationsIcon,
   Message as MessageIcon
 } from '@mui/icons-material';
-import { coursesAPI, messagesAPI, certificatesAPI } from '../../services/api';
+import { coursesAPI, messagesAPI, certificatesAPI, authAPI } from '../../services/api';
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
-  const { user } = useSelector((state) => state.auth);
+  const { user, userDataLoaded } = useSelector((state) => state.auth);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [enrolledCourses, setEnrolledCourses] = useState([]);
@@ -46,21 +46,35 @@ const StudentDashboard = () => {
   const [latestCertificate, setLatestCertificate] = useState(null);
 
   useEffect(() => {
-    if (user) {
-      fetchData();
+    if (!userDataLoaded) {
+      return;
     }
-  }, [user]);
+
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+
+    fetchData();
+  }, [user, userDataLoaded, navigate]);
 
   useEffect(() => {
+    if (!userDataLoaded || !user?._id) {
+      return;
+    }
+
     // Загрузка последнего сообщения
     const fetchLatestMessage = async () => {
       try {
         const response = await messagesAPI.getMessages();
-        const incoming = response.data.filter(msg => msg.recipient?._id === user?._id);
+        const incoming = response.data.filter(msg => msg.recipient?._id === user._id);
         incoming.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         setLatestMessage(incoming[0] || null);
-      } catch {}
+      } catch (err) {
+        console.error('Ошибка при получении сообщений:', err);
+      }
     };
+
     // Загрузка последнего сертификата
     const fetchLatestCertificate = async () => {
       try {
@@ -70,22 +84,28 @@ const StudentDashboard = () => {
           certs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
           setLatestCertificate(certs[0]);
         }
-      } catch {}
+      } catch (err) {
+        console.error('Ошибка при получении сертификатов:', err);
+      }
     };
-    if (user?._id) {
-      fetchLatestMessage();
-      fetchLatestCertificate();
-    }
-  }, [user?._id]);
+
+    fetchLatestMessage();
+    fetchLatestCertificate();
+  }, [user?._id, userDataLoaded]);
 
   const fetchData = async () => {
     try {
+      setLoading(true);
       const response = await coursesAPI.getEnrolledCourses();
       setEnrolledCourses(response.data);
       
       // Получаем прогресс для каждого курса
       const progressPromises = response.data.map(async (course) => {
         try {
+          if (!user?._id) {
+            console.error('ID пользователя не найден');
+            return { courseId: course._id, progress: null };
+          }
           const progress = await coursesAPI.getCourseProgress(course._id, user._id);
           return { courseId: course._id, progress };
         } catch (err) {
@@ -135,6 +155,7 @@ const StudentDashboard = () => {
       
       setLoading(false);
     } catch (err) {
+      console.error('Ошибка при загрузке данных:', err);
       setError('Ошибка при загрузке данных');
       setLoading(false);
     }
@@ -198,7 +219,10 @@ const StudentDashboard = () => {
                   <MessageIcon sx={{ mr: 2, color: '#1976d2' }} />
                   <ListItemText primary="Сообщения" />
                 </ListItem>
-                <ListItem button onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}>
+                <ListItem button onClick={() => {
+                  const el = document.getElementById('notifications');
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}>
                   <NotificationsIcon sx={{ mr: 2, color: '#7c3aed' }} />
                   <ListItemText primary="Уведомления" />
                 </ListItem>
@@ -339,6 +363,19 @@ const StudentDashboard = () => {
                       >
                         {hasStartedCourse(course._id) ? 'Продолжить' : 'Начать'}
                   </Button>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    sx={{ mt: 1, borderRadius: 3, fontWeight: 600, textTransform: 'none' }}
+                    onClick={async () => {
+                      if (window.confirm('Вы уверены, что хотите покинуть этот курс?')) {
+                        await coursesAPI.leaveCourse(course._id);
+                        fetchData();
+                      }
+                    }}
+                  >
+                    Покинуть курс
+                  </Button>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -407,7 +444,7 @@ const StudentDashboard = () => {
                           secondary={
                             <>
                               <Typography variant="body2" color="text.secondary">
-                                Получен новый сертификат по курсу "{latestCertificate.courseTitle}"
+                                Получен новый сертификат по курсу "{latestCertificate.course?.title || ''}"
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
                                 {new Date(latestCertificate.createdAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}

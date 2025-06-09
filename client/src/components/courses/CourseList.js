@@ -32,10 +32,10 @@ const categories = [
 ];
 
 const levels = [
-  'Все',
-  'Начальный',
-  'Средний',
-  'Продвинутый'
+  { label: 'Все', value: 'Все' },
+  { label: 'Начальный', value: 'beginner' },
+  { label: 'Средний', value: 'intermediate' },
+  { label: 'Продвинутый', value: 'advanced' }
 ];
 
 const levelLabels = {
@@ -159,8 +159,8 @@ const CourseList = () => {
                     onChange={handleFilterChange}
                   >
                     {levels.map(level => (
-                      <MenuItem key={level} value={level}>
-                        {level}
+                      <MenuItem key={level.value} value={level.value}>
+                        {level.label}
                       </MenuItem>
                     ))}
                   </Select>

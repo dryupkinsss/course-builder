@@ -267,171 +267,37 @@ const CourseDetail = () => {
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <Star sx={{ mr: 1 }} />
+                <MenuBookOutlinedIcon sx={{ mr: 1 }} />
                 <Typography variant="body2">
-                  Рейтинг: {course.rating}
+                  Уроков: {course.lessons?.length || 0}
                 </Typography>
               </Box>
-              <Typography variant="h5" color="primary" sx={{ mt: 2, fontWeight: 700 }}>
-                {course.price === 0 ? 'Бесплатно' : `${course.price} ₽`}
-              </Typography>
               {isEnrolled() ? (
                 <Button
                   variant="contained"
-                  startIcon={<PlayArrow />}
+                  fullWidth
                   onClick={handleStartLearning}
-                  sx={{
-                    mt: 2,
-                    borderRadius: 3,
-                    fontWeight: 600,
-                    py: 1.2,
-                    boxShadow: 2,
-                    background: 'linear-gradient(90deg, #1976d2 60%, #7c3aed 100%)',
-                    color: '#fff',
-                    textTransform: 'none',
-                    fontSize: 16,
-                    letterSpacing: 0.2,
-                    transition: 'box-shadow 0.3s, background 0.2s',
-                    ':hover': { boxShadow: 4, background: 'linear-gradient(90deg, #1565c0 60%, #6d28d9 100%)' }
-                  }}
+                  sx={{ mt: 2, py: 1.5, borderRadius: 2, fontWeight: 600 }}
                 >
-                  {hasStartedCourse() ? 'Продолжить обучение' : 'Начать обучение'}
+                  {courseProgress && courseProgress.lessons && courseProgress.lessons.every(l => l.progress === 0)
+                    ? 'Начать обучение'
+                    : 'Продолжить обучение'}
                 </Button>
-              ) :
-                !isCourseCreator() && (
-                  !isAuthenticated ? (
-                    <Button
-                      variant="contained"
-                      startIcon={<Add />}
-                      onClick={() => navigate('/login')}
-                      fullWidth
-                      sx={{
-                        mt: 2,
-                        borderRadius: 2,
-                        fontWeight: 500,
-                        py: 1,
-                        px: 2,
-                        minWidth: 0,
-                        boxShadow: '0 2px 8px rgba(25, 118, 210, 0.10)',
-                        textTransform: 'none',
-                        fontSize: 16,
-                        letterSpacing: 0.2,
-                        alignItems: 'center',
-                        gap: 1,
-                        transition: 'box-shadow 0.2s, background 0.2s',
-                        background: 'linear-gradient(90deg, #1976d2 60%, #7c3aed 100%)',
-                        color: '#fff',
-                        '& .MuiButton-startIcon': {
-                          mr: 1,
-                        },
-                      }}
-                    >
-                      Авторизоваться для записи на курс
-                    </Button>
-                  ) :
-                    <Button
-                      variant="contained"
-                      startIcon={<Add />}
-                      onClick={handleEnroll}
-                      sx={{
-                        mt: 2,
-                        borderRadius: 2,
-                        fontWeight: 500,
-                        py: 1,
-                        px: 2,
-                        minWidth: 0,
-                        boxShadow: '0 2px 8px rgba(25, 118, 210, 0.10)',
-                        textTransform: 'none',
-                        fontSize: 16,
-                        letterSpacing: 0.2,
-                        alignItems: 'center',
-                        gap: 1,
-                        transition: 'box-shadow 0.2s, background 0.2s',
-                        whiteSpace: 'nowrap',
-                        background: 'linear-gradient(90deg, #1976d2 60%, #7c3aed 100%)',
-                        color: '#fff',
-                        ':hover': {
-                          boxShadow: '0 4px 16px rgba(25, 118, 210, 0.18)',
-                          background: 'linear-gradient(90deg, #1565c0 60%, #6d28d9 100%)',
-                        },
-                        '& .MuiButton-startIcon': {
-                          mr: 1,
-                        },
-                      }}
-                    >
-                      Записаться на курс
-                    </Button>
-                )
-              }
-            </Paper>
-
-            {isEnrolled() && (
-              <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 3, bgcolor: '#fff' }}>
-                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                  Ваш прогресс
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="body2">
-                    Завершено уроков: {courseProgress?.completedLessons?.length || 0} из {course.lessons.length}
-                  </Typography>
-                </Box>
+              ) : (
                 <Button
-                  variant="outlined"
-                  color="error"
-                  onClick={handleLeaveCourse}
-                  sx={{ borderRadius: 3, fontWeight: 600, py: 1.2 }}
+                  variant="contained"
+                  fullWidth
+                  onClick={handleEnroll}
+                  disabled={isCourseCreator()}
+                  sx={{ mt: 2, py: 1.5, borderRadius: 2, fontWeight: 600 }}
                 >
-                  Покинуть курс
+                  {isCourseCreator() ? 'Вы создатель курса' : 'Записаться на курс'}
                 </Button>
-              </Paper>
-            )}
-          </Box>
-
-          {/* Main Content */}
-          <Box sx={{ flex: 1 }}>
-            <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 3, bgcolor: '#fff', mb: 3 }}>
-              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                Описание курса
-              </Typography>
-              <Typography variant="body1" paragraph>
-                {course.description}
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-                <Chip label={course.category} size="small" />
-                <Chip label={levelLabels[course.level] || course.level} size="small" />
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <Rating value={course.rating} readOnly precision={0.5} />
-                <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                  {course.rating}
-                </Typography>
-              </Box>
+              )}
             </Paper>
 
-            <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 3, bgcolor: '#fff', mb: 3 }}>
-              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                Уроки курса
-              </Typography>
-              <List>
-                {course.lessons.map((lesson, index) => (
-                  <React.Fragment key={lesson._id}>
-                    <ListItem
-                      button
-                      onClick={() => navigate(`/courses/${id}/lessons/${lesson._id}`)}
-                      sx={{ borderRadius: 3, mb: 1, boxShadow: 1, bgcolor: '#f5f7fa', transition: 'box-shadow 0.2s', ':hover': { boxShadow: 3, bgcolor: '#e3f2fd' } }}
-                    >
-                      <ListItemText
-                        primary={lesson.title}
-                        secondary={lesson.description}
-                      />
-                    </ListItem>
-                    {index < course.lessons.length - 1 && <Divider />}
-                  </React.Fragment>
-                ))}
-              </List>
-            </Paper>
-
-            <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 3, bgcolor: '#fff' }}>
+            {/* Отзывы */}
+            <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 3, bgcolor: '#fff', mb: 4 }}>
               <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                 Отзывы
               </Typography>
@@ -491,6 +357,125 @@ const CourseDetail = () => {
                   </Button>
                 </Box>
               )}
+            </Paper>
+          </Box>
+
+          {/* Main Content */}
+          <Box sx={{ flex: 1 }}>
+            <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 3, bgcolor: '#fff', mb: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                Описание курса
+              </Typography>
+              <Typography variant="body1" paragraph>
+                {course.description}
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+                <Chip label={course.category} size="small" />
+                <Chip label={levelLabels[course.level] || course.level} size="small" />
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <Rating value={course.rating} readOnly precision={0.5} />
+                <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                  {course.rating}
+                </Typography>
+              </Box>
+            </Paper>
+
+            {/* Чему вы научитесь */}
+            <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 3, bgcolor: '#fff', mb: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                Чему вы научитесь
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {(course.learningObjectives && course.learningObjectives.length > 0) ? (
+                  course.learningObjectives.map((outcome, index) => (
+                    <Box key={index} sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                      <Box sx={{ 
+                        width: 24, 
+                        height: 24, 
+                        borderRadius: '50%', 
+                        bgcolor: '#e0e7ff', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        mt: 0.5
+                      }}>
+                        <Typography variant="body2" sx={{ color: '#1976d2', fontWeight: 600 }}>
+                          {index + 1}
+                        </Typography>
+                      </Box>
+                      <Typography variant="body1">
+                        {outcome}
+                      </Typography>
+                    </Box>
+                  ))
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    Информация о навыках, которые вы приобретете, будет добавлена позже
+                  </Typography>
+                )}
+              </Box>
+            </Paper>
+
+            {/* Требования к курсу */}
+            <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 3, bgcolor: '#fff', mb: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                Требования к курсу
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {course.requirements && course.requirements.length > 0 ? (
+                  course.requirements.map((requirement, index) => (
+                    <Box key={index} sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                      <Box sx={{ 
+                        width: 24, 
+                        height: 24, 
+                        borderRadius: '50%', 
+                        bgcolor: '#e0e7ff', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        mt: 0.5
+                      }}>
+                        <Typography variant="body2" sx={{ color: '#1976d2', fontWeight: 600 }}>
+                          {index + 1}
+                        </Typography>
+                      </Box>
+                      <Typography variant="body1">
+                        {requirement}
+                      </Typography>
+                    </Box>
+                  ))
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    Информация о требованиях к курсу будет добавлена позже
+                  </Typography>
+                )}
+              </Box>
+            </Paper>
+
+            <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 3, bgcolor: '#fff', mb: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                Уроки курса
+              </Typography>
+              <List>
+                {course.lessons.map((lesson, index) => (
+                  <React.Fragment key={lesson._id}>
+                    <ListItem
+                      button
+                      onClick={() => navigate(`/courses/${id}/lessons/${lesson._id}`)}
+                      sx={{ borderRadius: 3, mb: 1, boxShadow: 1, bgcolor: '#f5f7fa', transition: 'box-shadow 0.2s', ':hover': { boxShadow: 3, bgcolor: '#e3f2fd' } }}
+                    >
+                      <ListItemText
+                        primary={lesson.title}
+                        secondary={lesson.description}
+                      />
+                    </ListItem>
+                    {index < course.lessons.length - 1 && <Divider />}
+                  </React.Fragment>
+                ))}
+              </List>
             </Paper>
           </Box>
         </Box>

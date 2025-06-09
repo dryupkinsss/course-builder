@@ -44,18 +44,34 @@ api.interceptors.response.use(
     console.error('Ошибка при получении ответа:', {
       status: error.response?.status,
       url: error.config?.url,
-      data: error.response?.data
+      data: error.response?.data,
+      message: error.message
     });
+    
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       window.location.href = '/login';
     }
+    
+    // Добавляем задержку перед редиректом на страницу логина
+    if (error.response?.status === 401) {
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 1000);
+    }
+    
     return Promise.reject(error);
   }
 );
 
 function handleApiError(error) {
-  if (error.response && error.response.data && error.response.data.message) {
+  console.error('API Error:', {
+    status: error.response?.status,
+    message: error.response?.data?.message || error.message,
+    url: error.config?.url
+  });
+  
+  if (error.response?.data?.message) {
     return new Error(error.response.data.message);
   }
   return new Error(error.message || 'Произошла ошибка при обращении к API');
@@ -100,6 +116,9 @@ export const coursesAPI = {
   },
   getCourseProgress: async (courseId, studentId) => {
     try {
+      if (!courseId || !studentId) {
+        throw new Error('Необходимо указать ID курса и ID студента');
+      }
       const response = await api.get(`/courses/${courseId}/progress/${studentId}`);
       return response.data;
     } catch (error) {

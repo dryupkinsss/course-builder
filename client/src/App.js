@@ -5,7 +5,7 @@ import { Provider } from 'react-redux';
 import CssBaseline from '@mui/material/CssBaseline';
 import store from './store';
 import { authAPI } from './services/api';
-import { loginSuccess } from './store/slices/authSlice';
+import { loginSuccess, setUserDataLoaded } from './store/slices/authSlice';
 
 // Компоненты
 import Navbar from './components/layout/Navbar';
@@ -42,19 +42,26 @@ const theme = createTheme({
 
 function App() {
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      authAPI.getCurrentUser()
-        .then(response => {
+    const initializeApp = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const response = await authAPI.getCurrentUser();
           store.dispatch(loginSuccess({
             user: response.data,
             token
           }));
-        })
-        .catch(() => {
+        } catch (error) {
+          console.error('Ошибка при получении данных пользователя:', error);
           localStorage.removeItem('token');
-        });
-    }
+          store.dispatch(setUserDataLoaded(true));
+        }
+      } else {
+        store.dispatch(setUserDataLoaded(true));
+      }
+    };
+
+    initializeApp();
   }, []);
 
   return (

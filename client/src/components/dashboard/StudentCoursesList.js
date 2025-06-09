@@ -65,6 +65,20 @@ const StudentCoursesList = () => {
                     >
                       Перейти к курсу
                     </Button>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      size="small"
+                      sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none', width: '100%' }}
+                      onClick={async () => {
+                        if (window.confirm('Вы уверены, что хотите покинуть этот курс?')) {
+                          await coursesAPI.leaveCourse(course._id);
+                          setCourses(courses.filter(c => c._id !== course._id));
+                        }
+                      }}
+                    >
+                      Покинуть курс
+                    </Button>
                   </Box>
                 </CardContent>
               </Card>

@@ -121,7 +121,7 @@ const Navbar = () => {
           )}
           {/* Messages */}
           {isAuthenticated && (
-            <IconButton color="primary">
+            <IconButton color="primary" onClick={() => navigate('/messages')}>
               <Message sx={{ color: '#555' }} />
             </IconButton>
           )}
