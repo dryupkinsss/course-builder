@@ -253,7 +253,11 @@ const CourseDetail = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                 <AccessTime sx={{ mr: 1 }} />
                 <Typography variant="body2">
-                  Длительность: {course.duration || 'Не указана'}
+                  Длительность: {course.totalDuration
+                    ? `${course.totalDuration} мин`
+                    : course.lessons && course.lessons.length > 0
+                      ? `${course.lessons.reduce((sum, l) => sum + (l.duration || 0), 0)} мин`
+                      : 'Не указана'}
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -294,68 +298,69 @@ const CourseDetail = () => {
                   {hasStartedCourse() ? 'Продолжить обучение' : 'Начать обучение'}
                 </Button>
               ) :
-                !isAuthenticated ? (
-                  <Button
-                    variant="contained"
-                    startIcon={<Add />}
-                    onClick={() => navigate('/login')}
-                    fullWidth
-                    sx={{
-                      mt: 2,
-                      borderRadius: 2,
-                      fontWeight: 500,
-                      py: 1,
-                      px: 2,
-                      minWidth: 0,
-                      boxShadow: '0 2px 8px rgba(25, 118, 210, 0.10)',
-                      textTransform: 'none',
-                      fontSize: 16,
-                      letterSpacing: 0.2,
-                      alignItems: 'center',
-                      gap: 1,
-                      transition: 'box-shadow 0.2s, background 0.2s',
-                      background: 'linear-gradient(90deg, #1976d2 60%, #7c3aed 100%)',
-                      color: '#fff',
-                      '& .MuiButton-startIcon': {
-                        mr: 1,
-                      },
-                    }}
-                  >
-                    Авторизоваться для записи на курс
-                  </Button>
-                ) : (
-                  <Button
-                    variant="contained"
-                    startIcon={<Add />}
-                    onClick={handleEnroll}
-                    sx={{
-                      mt: 2,
-                      borderRadius: 2,
-                      fontWeight: 500,
-                      py: 1,
-                      px: 2,
-                      minWidth: 0,
-                      boxShadow: '0 2px 8px rgba(25, 118, 210, 0.10)',
-                      textTransform: 'none',
-                      fontSize: 16,
-                      letterSpacing: 0.2,
-                      alignItems: 'center',
-                      gap: 1,
-                      transition: 'box-shadow 0.2s, background 0.2s',
-                      whiteSpace: 'nowrap',
-                      background: 'linear-gradient(90deg, #1976d2 60%, #7c3aed 100%)',
-                      color: '#fff',
-                      ':hover': {
-                        boxShadow: '0 4px 16px rgba(25, 118, 210, 0.18)',
-                        background: 'linear-gradient(90deg, #1565c0 60%, #6d28d9 100%)',
-                      },
-                      '& .MuiButton-startIcon': {
-                        mr: 1,
-                      },
-                    }}
-                  >
-                    Записаться на курс
-                  </Button>
+                !isCourseCreator() && (
+                  !isAuthenticated ? (
+                    <Button
+                      variant="contained"
+                      startIcon={<Add />}
+                      onClick={() => navigate('/login')}
+                      fullWidth
+                      sx={{
+                        mt: 2,
+                        borderRadius: 2,
+                        fontWeight: 500,
+                        py: 1,
+                        px: 2,
+                        minWidth: 0,
+                        boxShadow: '0 2px 8px rgba(25, 118, 210, 0.10)',
+                        textTransform: 'none',
+                        fontSize: 16,
+                        letterSpacing: 0.2,
+                        alignItems: 'center',
+                        gap: 1,
+                        transition: 'box-shadow 0.2s, background 0.2s',
+                        background: 'linear-gradient(90deg, #1976d2 60%, #7c3aed 100%)',
+                        color: '#fff',
+                        '& .MuiButton-startIcon': {
+                          mr: 1,
+                        },
+                      }}
+                    >
+                      Авторизоваться для записи на курс
+                    </Button>
+                  ) :
+                    <Button
+                      variant="contained"
+                      startIcon={<Add />}
+                      onClick={handleEnroll}
+                      sx={{
+                        mt: 2,
+                        borderRadius: 2,
+                        fontWeight: 500,
+                        py: 1,
+                        px: 2,
+                        minWidth: 0,
+                        boxShadow: '0 2px 8px rgba(25, 118, 210, 0.10)',
+                        textTransform: 'none',
+                        fontSize: 16,
+                        letterSpacing: 0.2,
+                        alignItems: 'center',
+                        gap: 1,
+                        transition: 'box-shadow 0.2s, background 0.2s',
+                        whiteSpace: 'nowrap',
+                        background: 'linear-gradient(90deg, #1976d2 60%, #7c3aed 100%)',
+                        color: '#fff',
+                        ':hover': {
+                          boxShadow: '0 4px 16px rgba(25, 118, 210, 0.18)',
+                          background: 'linear-gradient(90deg, #1565c0 60%, #6d28d9 100%)',
+                        },
+                        '& .MuiButton-startIcon': {
+                          mr: 1,
+                        },
+                      }}
+                    >
+                      Записаться на курс
+                    </Button>
                 )
               }
             </Paper>
