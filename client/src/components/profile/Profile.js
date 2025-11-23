@@ -195,210 +195,220 @@ const Profile = () => {
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom>
-        Профиль
-      </Typography>
+      <Paper elevation={3} sx={{ p: 4, borderRadius: 4, boxShadow: 3, bgcolor: '#f5f7fa', mb: 4 }}>
+        <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
+          Профиль
+        </Typography>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
-      )}
+        {error && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {error}
+          </Alert>
+        )}
+        {success && (
+          <Alert severity="success" sx={{ mb: 3 }}>
+            {success}
+          </Alert>
+        )}
 
-      {success && (
-        <Alert severity="success" sx={{ mb: 3 }}>
-          {success}
-        </Alert>
-      )}
-
-      <Grid container spacing={4}>
-        <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 3, textAlign: 'center' }}>
-            <Box sx={{ position: 'relative', display: 'inline-block' }}>
-              <Avatar
-                src={user?.avatar}
-                sx={{ width: 120, height: 120, mb: 2 }}
-              />
-              <input
-                accept="image/*"
-                type="file"
-                id="avatar-upload"
-                onChange={handleAvatarChange}
-                style={{ display: 'none' }}
-              />
-              <label htmlFor="avatar-upload">
-                <IconButton
-                  component="span"
-                  sx={{
-                    position: 'absolute',
-                    bottom: 0,
-                    right: 0,
-                    bgcolor: 'background.paper'
-                  }}
-                >
-                  <PhotoCameraIcon />
-                </IconButton>
-              </label>
-            </Box>
-            <Typography variant="h6" gutterBottom>
-              {user?.name}
-            </Typography>
-            <Typography color="text.secondary">
-              {user?.role === 'teacher' ? 'Преподаватель' : 'Студент'}
-            </Typography>
-          </Paper>
-
-          <Paper sx={{ p: 3, mt: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Настройки уведомлений
-            </Typography>
-            <List>
-              <ListItem>
-                <ListItemText
-                  primary="Email уведомления"
-                  secondary="Получать уведомления на email"
+        <Grid container spacing={4}>
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3, textAlign: 'center', borderRadius: 4, boxShadow: 2, bgcolor: '#fff' }}>
+              <Box sx={{ position: 'relative', display: 'inline-block' }}>
+                <Avatar
+                  src={user?.avatar}
+                  sx={{ width: 120, height: 120, mb: 2, mx: 'auto', boxShadow: 2 }}
                 />
-                <ListItemSecondaryAction>
-                  <Switch
-                    edge="end"
-                    checked={settings.emailNotifications}
-                    onChange={handleSettingsChange('emailNotifications')}
-                  />
-                </ListItemSecondaryAction>
-              </ListItem>
-              <Divider />
-              <ListItem>
-                <ListItemText
-                  primary="Обновления курсов"
-                  secondary="Уведомления о новых уроках"
+                <input
+                  accept="image/*"
+                  type="file"
+                  id="avatar-upload"
+                  onChange={handleAvatarChange}
+                  style={{ display: 'none' }}
                 />
-                <ListItemSecondaryAction>
-                  <Switch
-                    edge="end"
-                    checked={settings.courseUpdates}
-                    onChange={handleSettingsChange('courseUpdates')}
-                  />
-                </ListItemSecondaryAction>
-              </ListItem>
-              <Divider />
-              <ListItem>
-                <ListItemText
-                  primary="Маркетинговые рассылки"
-                  secondary="Получать информацию о новых курсах"
-                />
-                <ListItemSecondaryAction>
-                  <Switch
-                    edge="end"
-                    checked={settings.marketingEmails}
-                    onChange={handleSettingsChange('marketingEmails')}
-                  />
-                </ListItemSecondaryAction>
-              </ListItem>
-            </List>
-          </Paper>
-        </Grid>
-
-        <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Основная информация
-            </Typography>
-            <form onSubmit={handleSubmit}>
-              <TextField
-                fullWidth
-                label="Имя"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                margin="normal"
-                required
-              />
-              <TextField
-                fullWidth
-                label="Email"
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleChange}
-                margin="normal"
-                required
-              />
-              <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  startIcon={<SaveIcon />}
-                  disabled={saving}
-                >
-                  {saving ? <CircularProgress size={24} /> : 'Сохранить изменения'}
-                </Button>
+                <label htmlFor="avatar-upload">
+                  <IconButton
+                    component="span"
+                    sx={{
+                      position: 'absolute',
+                      bottom: 0,
+                      right: 0,
+                      bgcolor: 'background.paper',
+                      boxShadow: 1
+                    }}
+                  >
+                    <PhotoCameraIcon />
+                  </IconButton>
+                </label>
               </Box>
-            </form>
-          </Paper>
-
-          <Paper sx={{ p: 3, mt: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Изменение пароля
-            </Typography>
-            <form onSubmit={handlePasswordChange}>
-              <TextField
-                fullWidth
-                label="Текущий пароль"
-                name="currentPassword"
-                type="password"
-                value={formData.currentPassword}
-                onChange={handleChange}
-                margin="normal"
-                required
-              />
-              <TextField
-                fullWidth
-                label="Новый пароль"
-                name="newPassword"
-                type="password"
-                value={formData.newPassword}
-                onChange={handleChange}
-                margin="normal"
-                required
-              />
-              <TextField
-                fullWidth
-                label="Подтвердите новый пароль"
-                name="confirmPassword"
-                type="password"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                margin="normal"
-                required
-              />
-              <Box sx={{ mt: 3 }}>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  startIcon={<SecurityIcon />}
-                >
-                  Изменить пароль
-                </Button>
-              </Box>
-            </form>
-          </Paper>
-
-          {user?.role === 'teacher' && (
-            <Paper sx={{ p: 3, mt: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Настройки платежей
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                {user?.name}
               </Typography>
-              <Button
-                variant="outlined"
-                startIcon={<PaymentIcon />}
-                onClick={() => window.location.href = '/payment-settings'}
-              >
-                Настроить платежную информацию
-              </Button>
+              <Typography color="text.secondary">
+                {user?.role === 'teacher' ? 'Преподаватель' : 'Студент'}
+              </Typography>
             </Paper>
-          )}
+
+            <Paper sx={{ p: 3, mt: 3, borderRadius: 4, boxShadow: 2, bgcolor: '#fff' }}>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                Настройки уведомлений
+              </Typography>
+              <List>
+                <ListItem>
+                  <ListItemText
+                    primary="Email уведомления"
+                    secondary="Получать уведомления на email"
+                  />
+                  <ListItemSecondaryAction>
+                    <Switch
+                      edge="end"
+                      checked={settings.emailNotifications}
+                      onChange={handleSettingsChange('emailNotifications')}
+                    />
+                  </ListItemSecondaryAction>
+                </ListItem>
+                <Divider />
+                <ListItem>
+                  <ListItemText
+                    primary="Обновления курсов"
+                    secondary="Уведомления о новых уроках"
+                  />
+                  <ListItemSecondaryAction>
+                    <Switch
+                      edge="end"
+                      checked={settings.courseUpdates}
+                      onChange={handleSettingsChange('courseUpdates')}
+                    />
+                  </ListItemSecondaryAction>
+                </ListItem>
+                <Divider />
+                <ListItem>
+                  <ListItemText
+                    primary="Маркетинговые рассылки"
+                    secondary="Получать информацию о новых курсах"
+                  />
+                  <ListItemSecondaryAction>
+                    <Switch
+                      edge="end"
+                      checked={settings.marketingEmails}
+                      onChange={handleSettingsChange('marketingEmails')}
+                    />
+                  </ListItemSecondaryAction>
+                </ListItem>
+              </List>
+            </Paper>
+          </Grid>
+
+          <Grid item xs={12} md={8}>
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 4, boxShadow: 2, bgcolor: '#fff' }}>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                Основная информация
+              </Typography>
+              <form onSubmit={handleSubmit}>
+                <TextField
+                  fullWidth
+                  label="Имя"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  margin="normal"
+                  required
+                  sx={{ borderRadius: 2, bgcolor: '#f5f7fa' }}
+                />
+                <TextField
+                  fullWidth
+                  label="Email"
+                  name="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  margin="normal"
+                  required
+                  sx={{ borderRadius: 2, bgcolor: '#f5f7fa' }}
+                />
+                <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    startIcon={<SaveIcon />}
+                    disabled={saving}
+                    sx={{ borderRadius: 3, fontWeight: 600, py: 1.2, boxShadow: 2, transition: 'box-shadow 0.3s', ':hover': { boxShadow: 4 } }}
+                  >
+                    {saving ? <CircularProgress size={24} /> : 'Сохранить изменения'}
+                  </Button>
+                </Box>
+              </form>
+            </Paper>
+
+            <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 2, bgcolor: '#fff' }}>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                Смена пароля
+              </Typography>
+              <form onSubmit={handlePasswordChange}>
+                <TextField
+                  fullWidth
+                  label="Текущий пароль"
+                  name="currentPassword"
+                  type="password"
+                  value={formData.currentPassword}
+                  onChange={handleChange}
+                  margin="normal"
+                  required
+                  sx={{ borderRadius: 2, bgcolor: '#f5f7fa' }}
+                />
+                <TextField
+                  fullWidth
+                  label="Новый пароль"
+                  name="newPassword"
+                  type="password"
+                  value={formData.newPassword}
+                  onChange={handleChange}
+                  margin="normal"
+                  required
+                  sx={{ borderRadius: 2, bgcolor: '#f5f7fa' }}
+                />
+                <TextField
+                  fullWidth
+                  label="Подтвердите новый пароль"
+                  name="confirmPassword"
+                  type="password"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  margin="normal"
+                  required
+                  sx={{ borderRadius: 2, bgcolor: '#f5f7fa' }}
+                />
+                <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    startIcon={<SecurityIcon />}
+                    sx={{ borderRadius: 3, fontWeight: 600, py: 1.2, boxShadow: 2, transition: 'box-shadow 0.3s', ':hover': { boxShadow: 4 } }}
+                  >
+                    Сменить пароль
+                  </Button>
+                </Box>
+              </form>
+            </Paper>
+
+            {user?.role === 'teacher' && (
+              <Paper sx={{ p: 3, mt: 3, borderRadius: 4, boxShadow: 2, bgcolor: '#fff' }}>
+                <Typography variant="h6" gutterBottom>
+                  Настройки платежей
+                </Typography>
+                <Button
+                  variant="outlined"
+                  startIcon={<PaymentIcon />}
+                  onClick={() => window.location.href = '/payment-settings'}
+                  sx={{ borderRadius: 3, fontWeight: 600, py: 1.2 }}
+                >
+                  Настроить платежную информацию
+                </Button>
+              </Paper>
+            )}
+          </Grid>
         </Grid>
-      </Grid>
+      </Paper>
     </Container>
   );
 };

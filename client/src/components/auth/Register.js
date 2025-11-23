@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Container,
@@ -22,13 +22,16 @@ import { loginSuccess } from '../../store/slices/authSlice';
 const Register = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const isTeacher = params.get('role') === 'teacher';
   const { loading, error, isAuthenticated } = useSelector((state) => state.auth);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'student'
+    accessCode: ''
   });
   const [formError, setFormError] = useState('');
 
@@ -49,8 +52,16 @@ const Register = () => {
     e.preventDefault();
     setFormError('');
 
+    if (!formData.name.trim()) {
+      setFormError('Пожалуйста, введите ФИО');
+      return;
+    }
     if (formData.password !== formData.confirmPassword) {
       setFormError('Пароли не совпадают');
+      return;
+    }
+    if (isTeacher && formData.accessCode !== '597238') {
+      setFormError('Неверный код-доступа для преподавателя');
       return;
     }
 
@@ -59,9 +70,15 @@ const Register = () => {
         name: formData.name,
         email: formData.email,
         password: formData.password,
-        role: formData.role
+        role: isTeacher ? 'teacher' : 'student'
       });
-      dispatch(loginSuccess(response.data));
+      localStorage.setItem('token', response.data.token);
+      // Получаем полные данные пользователя
+      const userResponse = await authAPI.getCurrentUser();
+      dispatch(loginSuccess({
+        user: userResponse.data,
+        token: response.data.token
+      }));
       navigate('/dashboard');
     } catch (err) {
       setFormError(
@@ -71,32 +88,28 @@ const Register = () => {
   };
 
   return (
-    <Container maxWidth="sm">
-      <Box sx={{ mt: 8, mb: 4 }}>
-        <Paper elevation={3} sx={{ p: 4 }}>
-          <Typography component="h1" variant="h5" align="center" gutterBottom>
-            Регистрация
+    <Box sx={{ minHeight: '100vh', bgcolor: 'linear-gradient(135deg, #f8fafc 60%, #e0e7ff 100%)', py: 4 }}>
+      <Container maxWidth="sm" sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
+        <Paper elevation={4} sx={{ p: 3, borderRadius: 4, boxShadow: 4, mt: 6, maxWidth: 420, width: '100%' }}>
+          <Typography component="h1" variant="h4" align="center" sx={{ fontWeight: 800, mb: 1.5, letterSpacing: -1, color: '#18181b' }}>
+            {isTeacher ? 'Регистрация преподавателя' : 'Регистрация студента'}
           </Typography>
-
-          {(error || formError) && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error || formError}
-            </Alert>
-          )}
-
+          <Typography align="center" sx={{ color: 'text.secondary', mb: 2 }}>
+            {isTeacher ? 'Для регистрации преподавателя требуется код-доступа' : 'Заполните форму для создания аккаунта студента'}
+          </Typography>
           <form onSubmit={handleSubmit}>
             <TextField
               margin="normal"
               required
               fullWidth
-              id="name"
-              label="Имя"
               name="name"
-              autoComplete="name"
-              autoFocus
+              label="ФИО"
+              type="text"
+              id="name"
               value={formData.name}
               onChange={handleChange}
               disabled={loading}
+              sx={{ mb: 1.5, borderRadius: 3, bgcolor: '#f5f7fa' }}
             />
             <TextField
               margin="normal"
@@ -109,6 +122,7 @@ const Register = () => {
               value={formData.email}
               onChange={handleChange}
               disabled={loading}
+              sx={{ mb: 1.5, borderRadius: 3, bgcolor: '#f5f7fa' }}
             />
             <TextField
               margin="normal"
@@ -118,10 +132,10 @@ const Register = () => {
               label="Пароль"
               type="password"
               id="password"
-              autoComplete="new-password"
               value={formData.password}
               onChange={handleChange}
               disabled={loading}
+              sx={{ mb: 1.5, borderRadius: 3, bgcolor: '#f5f7fa' }}
             />
             <TextField
               margin="normal"
@@ -134,44 +148,65 @@ const Register = () => {
               value={formData.confirmPassword}
               onChange={handleChange}
               disabled={loading}
+              sx={{ mb: 1.5, borderRadius: 3, bgcolor: '#f5f7fa' }}
             />
-            <FormControl fullWidth margin="normal">
-              <InputLabel id="role-label">Роль</InputLabel>
-              <Select
-                labelId="role-label"
-                id="role"
-                name="role"
-                value={formData.role}
-                label="Роль"
+            {isTeacher && (
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                name="accessCode"
+                label="Код-доступа преподавателя"
+                type="text"
+                id="accessCode"
+                value={formData.accessCode}
                 onChange={handleChange}
                 disabled={loading}
-              >
-                <MenuItem value="student">Студент</MenuItem>
-                <MenuItem value="teacher">Преподаватель</MenuItem>
-              </Select>
-            </FormControl>
+                sx={{ mb: 2, borderRadius: 3, bgcolor: '#f3e8ff', border: '1px solid #7c3aed' }}
+                InputLabelProps={{ style: { color: '#7c3aed' } }}
+              />
+            )}
+            {formError && (
+              <Alert severity="error" sx={{ mt: 2 }}>{formError}</Alert>
+            )}
             <Button
               type="submit"
               fullWidth
               variant="contained"
-              sx={{ mt: 3, mb: 2 }}
+              sx={{
+                mt: 1,
+                mb: 1.5,
+                py: 1.2,
+                fontWeight: 700,
+                fontSize: 18,
+                borderRadius: 3,
+                background: isTeacher ? 'linear-gradient(90deg, #7c3aed 60%, #1976d2 100%)' : 'linear-gradient(90deg, #1976d2 60%, #7c3aed 100%)',
+                color: '#fff',
+                boxShadow: 2,
+                textTransform: 'none',
+                letterSpacing: 0.2,
+                ':hover': { background: isTeacher ? 'linear-gradient(90deg, #6d28d9 60%, #1565c0 100%)' : 'linear-gradient(90deg, #1565c0 60%, #6d28d9 100%)' }
+              }}
               disabled={loading}
             >
               {loading ? <CircularProgress size={24} /> : 'Зарегистрироваться'}
             </Button>
-            <Box sx={{ textAlign: 'center' }}>
-              <Link
-                component={RouterLink}
-                to="/login"
-                variant="body2"
-              >
-                Уже есть аккаунт? Войдите
-              </Link>
-            </Box>
+            {!isTeacher && (
+              <Box sx={{ textAlign: 'center', mt: 1 }}>
+                <Button
+                  component={RouterLink}
+                  to="/login"
+                  variant="text"
+                  sx={{ color: '#1976d2', fontWeight: 600, textTransform: 'none', fontSize: 16 }}
+                >
+                  Уже есть аккаунт? Войдите
+                </Button>
+              </Box>
+            )}
           </form>
         </Paper>
-      </Box>
-    </Container>
+      </Container>
+    </Box>
   );
 };
 

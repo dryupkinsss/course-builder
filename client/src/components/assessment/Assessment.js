@@ -205,10 +205,10 @@ const Assessment = () => {
               >
                 {assessment.questions[activeStep].options.map((option) => (
                   <FormControlLabel
-                    key={option}
-                    value={option}
+                    key={typeof option === 'object' ? option.text : option}
+                    value={typeof option === 'object' ? option.text : option}
                     control={<Radio />}
-                    label={option}
+                    label={typeof option === 'object' ? option.text : option}
                   />
                 ))}
               </RadioGroup>
@@ -217,20 +217,21 @@ const Assessment = () => {
             <FormControl component="fieldset">
               {assessment.questions[activeStep].options.map((option) => (
                 <FormControlLabel
-                  key={option}
+                  key={typeof option === 'object' ? option.text : option}
                   control={
                     <Checkbox
-                      checked={answers[assessment.questions[activeStep]._id]?.includes(option) || false}
+                      checked={answers[assessment.questions[activeStep]._id]?.includes(typeof option === 'object' ? option.text : option) || false}
                       onChange={(e) => {
                         const currentAnswers = answers[assessment.questions[activeStep]._id] || [];
+                        const optionValue = typeof option === 'object' ? option.text : option;
                         const newAnswers = e.target.checked
-                          ? [...currentAnswers, option]
-                          : currentAnswers.filter(a => a !== option);
+                          ? [...currentAnswers, optionValue]
+                          : currentAnswers.filter(a => a !== optionValue);
                         handleAnswerChange(assessment.questions[activeStep]._id, newAnswers);
                       }}
                     />
                   }
-                  label={option}
+                  label={typeof option === 'object' ? option.text : option}
                 />
               ))}
             </FormControl>

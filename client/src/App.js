@@ -5,7 +5,7 @@ import { Provider } from 'react-redux';
 import CssBaseline from '@mui/material/CssBaseline';
 import store from './store';
 import { authAPI } from './services/api';
-import { loginSuccess } from './store/slices/authSlice';
+import { loginSuccess, setUserDataLoaded } from './store/slices/authSlice';
 
 // Компоненты
 import Navbar from './components/layout/Navbar';
@@ -16,7 +16,17 @@ import CourseList from './components/courses/CourseList';
 import CourseDetail from './components/courses/CourseDetail';
 import CourseCreate from './components/courses/CourseCreate';
 import LessonDetail from './components/lessons/LessonDetail';
+import LessonCreate from './components/lessons/LessonCreate';
 import Dashboard from './components/dashboard/Dashboard';
+import CourseEdit from './components/courses/CourseEdit';
+import Students from './components/students/Students';
+import Messages from './components/messages/Messages';
+import QuizComponent from './components/quiz/QuizComponent';
+import Certificates from './components/certificates/Certificates';
+import Footer from './components/layout/Footer';
+import TeacherCoursesList from './components/dashboard/TeacherCoursesList';
+import StudentCoursesList from './components/dashboard/StudentCoursesList';
+import About from './components/pages/About';
 
 // Создание темы
 const theme = createTheme({
@@ -32,19 +42,26 @@ const theme = createTheme({
 
 function App() {
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      authAPI.getCurrentUser()
-        .then(response => {
+    const initializeApp = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const response = await authAPI.getCurrentUser();
           store.dispatch(loginSuccess({
             user: response.data,
             token
           }));
-        })
-        .catch(() => {
+        } catch (error) {
+          console.error('Ошибка при получении данных пользователя:', error);
           localStorage.removeItem('token');
-        });
-    }
+          store.dispatch(setUserDataLoaded(true));
+        }
+      } else {
+        store.dispatch(setUserDataLoaded(true));
+      }
+    };
+
+    initializeApp();
   }, []);
 
   return (
@@ -61,9 +78,19 @@ function App() {
               <Route path="/courses" element={<CourseList />} />
               <Route path="/courses/:id" element={<CourseDetail />} />
               <Route path="/courses/create" element={<CourseCreate />} />
-              <Route path="/lessons/:id" element={<LessonDetail />} />
+              <Route path="/courses/:id/edit" element={<CourseEdit />} />
+              <Route path="/courses/:courseId/lessons/create" element={<LessonCreate />} />
+              <Route path="/courses/:courseId/lessons/:lessonId" element={<LessonDetail />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/dashboard/teacher" element={<TeacherCoursesList />} />
+              <Route path="/dashboard/courses" element={<StudentCoursesList />} />
+              <Route path="/students" element={<Students />} />
+              <Route path="/messages" element={<Messages />} />
+              <Route path="/quiz/:id" element={<QuizComponent />} />
+              <Route path="/certificates" element={<Certificates />} />
+              <Route path="/about" element={<About />} />
             </Routes>
+            <Footer />
           </div>
         </Router>
       </ThemeProvider>

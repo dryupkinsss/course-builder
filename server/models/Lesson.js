@@ -21,15 +21,21 @@ const lessonSchema = new mongoose.Schema({
     },
     content: {
         type: String,
-        required: true
+        default: ''
     },
     duration: {
         type: Number, // в минутах
         required: true
     },
+    video: {
+        type: String
+    },
     videoUrl: {
         type: String
     },
+    resources: [{
+        type: String
+    }],
     attachments: [{
         name: String,
         url: String,

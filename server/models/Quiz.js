@@ -10,6 +10,15 @@ const quizSchema = new mongoose.Schema({
     lesson: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Lesson',
+        required: false
+    },
+    course: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Course',
+        required: true
+    },
+    order: {
+        type: Number,
         required: true
     },
     questions: [{

@@ -43,7 +43,13 @@ const Login = () => {
 
     try {
       const response = await authAPI.login(formData);
-      dispatch(loginSuccess(response.data));
+      localStorage.setItem('token', response.data.token);
+      // Получаем полные данные пользователя
+      const userResponse = await authAPI.getCurrentUser();
+      dispatch(loginSuccess({
+        user: userResponse.data,
+        token: response.data.token
+      }));
       navigate('/dashboard');
     } catch (err) {
       dispatch(loginFailure(
@@ -53,19 +59,20 @@ const Login = () => {
   };
 
   return (
-    <Container maxWidth="sm">
-      <Box sx={{ mt: 8, mb: 4 }}>
-        <Paper elevation={3} sx={{ p: 4 }}>
-          <Typography component="h1" variant="h5" align="center" gutterBottom>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'linear-gradient(135deg, #f8fafc 60%, #e0e7ff 100%)', py: 4 }}>
+      <Container maxWidth="sm" sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
+        <Paper elevation={4} sx={{ p: 3, borderRadius: 4, boxShadow: 4, mt: 6, maxWidth: 420, width: '100%' }}>
+          <Typography component="h1" variant="h4" align="center" sx={{ fontWeight: 800, mb: 1.5, letterSpacing: -1, color: '#18181b' }}>
             Вход в систему
           </Typography>
-
+          <Typography align="center" sx={{ color: 'text.secondary', mb: 2 }}>
+            Добро пожаловать! Введите свои данные для входа
+          </Typography>
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {error}
             </Alert>
           )}
-
           <form onSubmit={handleSubmit}>
             <TextField
               margin="normal"
@@ -79,6 +86,7 @@ const Login = () => {
               value={formData.email}
               onChange={handleChange}
               disabled={loading}
+              sx={{ mb: 1.5, borderRadius: 3, bgcolor: '#f5f7fa' }}
             />
             <TextField
               margin="normal"
@@ -92,29 +100,44 @@ const Login = () => {
               value={formData.password}
               onChange={handleChange}
               disabled={loading}
+              sx={{ mb: 2, borderRadius: 3, bgcolor: '#f5f7fa' }}
             />
             <Button
               type="submit"
               fullWidth
               variant="contained"
-              sx={{ mt: 3, mb: 2 }}
+              sx={{
+                mt: 1,
+                mb: 1.5,
+                py: 1.2,
+                fontWeight: 700,
+                fontSize: 18,
+                borderRadius: 3,
+                background: 'linear-gradient(90deg, #1976d2 60%, #7c3aed 100%)',
+                color: '#fff',
+                boxShadow: 2,
+                textTransform: 'none',
+                letterSpacing: 0.2,
+                ':hover': { background: 'linear-gradient(90deg, #1565c0 60%, #6d28d9 100%)' }
+              }}
               disabled={loading}
             >
               {loading ? <CircularProgress size={24} /> : 'Войти'}
             </Button>
-            <Box sx={{ textAlign: 'center' }}>
-              <Link
+            <Box sx={{ textAlign: 'center', mt: 1 }}>
+              <Button
                 component={RouterLink}
                 to="/register"
-                variant="body2"
+                variant="text"
+                sx={{ color: '#1976d2', fontWeight: 600, textTransform: 'none', fontSize: 16 }}
               >
                 Нет аккаунта? Зарегистрируйтесь
-              </Link>
+              </Button>
             </Box>
           </form>
         </Paper>
-      </Box>
-    </Container>
+      </Container>
+    </Box>
   );
 };
 

@@ -37,6 +37,10 @@ const courseSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Lesson'
     }],
+    quizzes: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Quiz'
+    }],
     enrolledStudents: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
@@ -81,6 +85,26 @@ const courseSchema = new mongoose.Schema({
 // Виртуальное поле для количества уроков
 courseSchema.virtual('lessonCount').get(function() {
     return this.lessons.length;
+});
+
+// Метод для подсчета общей длительности курса
+courseSchema.methods.calculateTotalDuration = async function() {
+    const Lesson = mongoose.model('Lesson');
+    const lessons = await Lesson.find({ _id: { $in: this.lessons } });
+    this.totalDuration = lessons.reduce((total, lesson) => total + lesson.duration, 0);
+    return this.totalDuration;
+};
+
+// Метод для подсчета дохода преподавателя
+courseSchema.methods.calculateTeacherIncome = function() {
+    const teacherShare = 0.4; // 40% от стоимости курса
+    return this.price * this.enrolledStudents.length * teacherShare;
+};
+
+// Предсохранный хук для подсчета общей длительности
+courseSchema.pre('save', async function(next) {
+    await this.calculateTotalDuration();
+    next();
 });
 
 // Виртуальное поле для количества студентов
